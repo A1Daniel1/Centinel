@@ -1,0 +1,163 @@
+@startuml
+' ============================================================================
+' C4 Model - Nivel 4: Diagrama de Codigo
+' Alcance: las clases e interfaces que sostienen el Multi-Label Inference Service.
+' Este nivel solo se detalla para el contenedor mas critico del sistema.
+' ============================================================================
+hide empty members
+skinparam classAttributeIconSize 0
+skinparam nodesep 22
+skinparam ranksep 28
+
+title <size:22><b>Nivel 4 — Diagrama de Código</b></size>\n<size:14>Clases e interfaces del componente de inferencia multi-etiqueta</size>
+
+package "inference.contract" {
+  interface InferenceService <<interface>> {
+    + predict(request: SceneRequest): LabelSet
+  }
+
+  class SceneRequest <<value object>> {
+    + sceneId: SceneId
+    + tileId: TileId
+    + capturedAt: Instant
+    + sensor: SensorType
+    + bands: BandSet
+    + isComplete(): boolean
+  }
+
+  class FeatureVector <<value object>> {
+    + tileId: TileId
+    + optical: float[]
+    + sar: float[]
+    + validMask: boolean[]
+    + dimension(): int
+  }
+
+  class LabelSet <<value object>> {
+    + deforestation: LabelPrediction
+    + evoa: LabelPrediction
+    + coca: LabelPrediction
+    + hasAnyPositive(): boolean
+  }
+
+  class LabelPrediction <<value object>> {
+    + phenomenon: Phenomenon
+    + confidence: float
+    + threshold: float
+    + isPositive(): boolean
+  }
+}
+
+package "inference.model" {
+  abstract class MultiLabelClassifier <<abstract>> {
+    # artifact: ModelArtifact
+    + {abstract} forward(features: FeatureVector): float[]
+    + version(): ModelVersion
+    + warmUp(): void
+  }
+
+  class OpticalSARFusionModel <<model>> {
+    + forward(features: FeatureVector): float[]
+    - fuseChannelAttention(optical: float[], sar: float[]): float[]
+  }
+
+  class IndependentBinaryModel <<baseline>> {
+    + forward(features: FeatureVector): float[]
+  }
+
+  class ModelArtifact <<value object>> {
+    + modelId: ModelId
+    + version: ModelVersion
+    + uri: URI
+    + sha256: string
+    + trainedAt: Instant
+    + verifyIntegrity(): boolean
+  }
+}
+
+package "inference.registry" {
+  interface ModelRegistry <<interface>> {
+    + resolve(version: ModelVersion): ModelArtifact
+    + latest(): ModelArtifact
+  }
+
+  class S3ModelRegistry <<adapter>> {
+    + resolve(version: ModelVersion): ModelArtifact
+    + latest(): ModelArtifact
+    - download(artifact: ModelArtifact): Path
+  }
+}
+
+package "inference.postprocess" {
+  class ConfidenceCalibrator <<component>> {
+    + calibrate(raw: float[]): float[]
+  }
+
+  class ThresholdPolicy <<component>> {
+    + thresholds: Map<Phenomenon, float>
+    - minPrecision: float
+    + apply(probabilities: float[]): LabelSet
+    + withThreshold(phenomenon: Phenomenon, value: float): ThresholdPolicy
+  }
+}
+
+package "inference.publish" {
+  interface PredictionPublisher <<interface>> {
+    + publish(labels: LabelSet): void
+  }
+
+  class KafkaPredictionPublisher <<adapter>> {
+    + publish(labels: LabelSet): void
+  }
+}
+
+package "inference.telemetry" {
+  class InferenceMetrics <<component>> {
+    + observeLatency(seconds: double): void
+    + observeBatchSize(size: int): void
+    + observeLabelDrift(phenomenon: Phenomenon, rate: double): void
+  }
+}
+
+class InferenceGrpcHandler <<entrypoint>> {
+  + predict(request: SceneRequest): LabelSet
+}
+
+InferenceGrpcHandler ..|> InferenceService
+S3ModelRegistry ..|> ModelRegistry
+KafkaPredictionPublisher ..|> PredictionPublisher
+OpticalSARFusionModel --|> MultiLabelClassifier
+IndependentBinaryModel --|> MultiLabelClassifier
+
+InferenceGrpcHandler *-- SceneRequest : valida
+InferenceGrpcHandler --> FeatureVector : arma
+FeatureVector --> MultiLabelClassifier : alimenta
+MultiLabelClassifier o-- ModelArtifact : carga
+S3ModelRegistry --> ModelArtifact : resuelve
+OpticalSARFusionModel ..> LabelSet : produce
+MultiLabelClassifier --> ConfidenceCalibrator : calibra
+ConfidenceCalibrator --> ThresholdPolicy : decide
+ThresholdPolicy --> LabelSet : construye
+InferenceGrpcHandler --> ThresholdPolicy : aplica política
+LabelSet *-- LabelPrediction : contiene
+KafkaPredictionPublisher --> LabelSet : publica
+InferenceGrpcHandler ..> InferenceMetrics : reporta
+
+note right of MultiLabelClassifier
+  <b>El punto de decisión del proyecto</b>
+  La misma interfaz abstracta permite comparar,
+  con datos y particiones idénticos, el modelo
+  conjunto contra el <i>baseline</i> de tres
+  clasificadores binarios independientes.
+  Cambiar de estrategia no obliga a tocar el
+  resto del sistema: sustituibilidad por contrato.
+end note
+
+note bottom of ThresholdPolicy
+  <b>Compromiso precisión-exhaustividad expuesto</b>
+  El operador institucional ajusta umbrales por
+  fenómeno sin reentrenar el modelo. Los umbrales
+  vigentes quedan auditados junto a cada alerta.
+end note
+
+@enduml

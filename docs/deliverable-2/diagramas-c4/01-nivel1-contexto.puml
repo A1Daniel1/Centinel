@@ -1,0 +1,43 @@
+@startuml
+' ============================================================================
+' C4 Model - Nivel 1: Diagrama de Contexto del Sistema
+' Proyecto: Early Detection of Illegal Territorial Activities via Satellite Imagery
+' El texto explicativo de cada nivel vive en el README de esta carpeta:
+' mezclar prosa larga dentro del diagrama lo vuelve ilegible y no siempre renderiza.
+' ============================================================================
+!include <C4/C4_Context>
+
+title <size:22><b>Nivel 1 — Diagrama de Contexto del Sistema</b></size>\n<size:14>Detección temprana de actividades territoriales ilícitas por imágenes satelitales</size>
+
+Person(analyst, "Analista Territorial", "Analista de la autoridad ambiental. Revisa, valida o descarta alertas.")
+Person(decisionMaker, "Tomador de Decisión Institucional", "Autoridad judicial o de seguridad que actúa sobre alertas priorizadas.")
+Person(indigenous, "Autoridad Territorial Indígena", "Autoridades de resguardo y monitores territoriales. Consumen alertas agregadas de su territorio.")
+Person(operator, "Operador de Plataforma", "Personal de operación y monitoreo de la plataforma.")
+
+System_Boundary(platformBoundary, "Alcance del sistema") {
+  System(platform, "Plataforma de Monitoreo Territorial", "Detecta de forma conjunta deforestación, minería ilegal de oro (EVOA) y cultivos de coca a partir de imágenes ópticas y de radar SAR. Entrega alertas georreferenciadas y trazables.")
+}
+
+System_Ext(copernicus, "Copernicus / Google Earth Engine", "Fuentes gratuitas de imágenes satelitales: Sentinel-1 (SAR), Sentinel-2 y Landsat (óptico).")
+System_Ext(ideam, "IDEAM — SMByC", "Registros oficiales de verdad de campo sobre deforestación y alertas tempranas.")
+System_Ext(unodc, "UNODC — SIMCI", "Cifras oficiales de referencia de cultivos de coca y de explotación de oro de aluvión.")
+System_Ext(govSystems, "Sistemas de Información del Estado", "Tableros del SMByC y portales de datos ministeriales que consumen las alertas.")
+
+Rel(analyst, platform, "Revisa y valida alertas", "HTTPS / REST")
+Rel(decisionMaker, platform, "Consume alertas priorizadas", "HTTPS / REST")
+Rel(indigenous, platform, "Consume alertas agregadas de su territorio", "HTTPS / REST")
+Rel(operator, platform, "Opera y monitorea la plataforma", "HTTPS / Grafana")
+
+Rel(platform, copernicus, "Ingiere escenas ópticas y SAR", "HTTPS / STAC")
+Rel(platform, ideam, "Lee etiquetas de deforestación", "HTTPS")
+Rel(platform, unodc, "Lee referencias de coca y EVOA", "HTTPS / CSV")
+Rel(platform, govSystems, "Entrega alertas georreferenciadas", "Webhook / Export")
+
+note bottom of platform
+  <b>Restricción de diseño</b>
+  El sistema no reemplaza a IDEAM ni a UNODC: los consume como
+  fuente de verdad y les devuelve alertas accionables en un ciclo
+  mucho más corto que el actual, que hoy es trimestral o anual.
+end note
+
+@enduml

@@ -1,0 +1,67 @@
+@startuml
+' ============================================================================
+' C4 Model - Nivel 2: Diagrama de Contenedores
+' Proyecto: Early Detection of Illegal Territorial Activities via Satellite Imagery
+' Las anotaciones de replicas, autoescalado y zonas de disponibilidad son parte
+' deliberada del diseno: la alta disponibilidad y la escalabilidad deben verse aqui.
+' ============================================================================
+!include <C4/C4_Container>
+
+title <size:22><b>Nivel 2 — Diagrama de Contenedores</b></size>\n<size:14>Plataforma de Monitoreo Territorial · despliegue de referencia en 3 zonas de disponibilidad</size>
+
+Person(analyst, "Analista Territorial", "Revisa y valida alertas")
+Person(decisionMaker, "Tomador de Decisión", "Actúa sobre alertas priorizadas")
+
+System_Boundary(platform, "Plataforma de Monitoreo Territorial") {
+
+  Container(ac07, "Alert API Gateway", "Envoy", "Fachada externa, autenticación y limitación de tasa.\n<b>HPA 3–15 réplicas · 3 AZ · salud activa</b>")
+
+  Container(ac01, "Satellite Ingestion Service", "Python / FastAPI", "Ingesta programada de escenas Sentinel-1, Sentinel-2 y Landsat y registro de metadatos.\n<b>3 réplicas · escalado por profundidad de cola</b>")
+  Container(ac02, "Preprocessing Service", "Python / GDAL", "Enmascarado de nubes, calibración radiométrica y corregistro.\n<b>HPA 2–12 · CPU</b>")
+  Container(ac03, "Feature Fusion Service", "Python", "Alineación y fusión de firmas ópticas y SAR.\n<b>HPA 2–8 · cola</b>")
+  Container(ac04, "Multi-Label Inference Service", "PyTorch / gRPC", "Clasificación multi-etiqueta conjunta de los tres fenómenos.\n<b>GPU · autoscaling 1–6 por profundidad de cola</b>")
+  Container(ac05, "False-Alarm Filter Service", "Python", "Supresión por consistencia temporal y contexto espacial con umbrales configurables.\n<b>HPA 2–8 · cola</b>")
+  Container(ac06, "Alert Management Service", "Python / FastAPI", "Ciclo de vida, persistencia y auditoría de alertas.\n<b>3 réplicas · 3 AZ</b>")
+  Container(ac08, "Vector Similarity Service", "Python", "Búsqueda por similitud sobre patrones territoriales históricos.\n<b>2 réplicas · índice particionado</b>")
+  Container(ac09, "Observability Platform", "Prometheus / Grafana / OpenTelemetry", "Métricas, logs y trazas distribuidas.\n<b>2 réplicas · retención local + remota</b>")
+
+  ContainerQueue(tn06, "Message Broker", "Kafka · log particionado", "Cola asíncrona de ingesta e inferencia, particionada por tile.\n<b>3 brokers · factor de replicación 3 · uno por AZ</b>")
+
+  ContainerDb(tn04, "Alert Database", "PostgreSQL + PostGIS", "Territorios, detecciones, alertas y auditoría.\n<b>Multi-AZ primario + standby con failover automático · 2 réplicas de lectura</b>")
+  ContainerDb(tn05, "Vector Store", "pgvector / motor dedicado", "Índice de embeddings para búsqueda por similitud.\n<b>Particionado por territorio · reconstruible</b>")
+  ContainerDb(tn03, "Object Storage", "S3-compatible", "Escenas raster crudas y preprocesadas.\n<b>Versionado + replicación entre regiones</b>")
+}
+
+System_Ext(copernicus, "Copernicus / Google Earth Engine", "Fuentes de imágenes satelitales")
+System_Ext(govSystems, "Sistemas de Información del Estado", "Tableros SMByC y portales ministeriales")
+
+Rel(analyst, ac07, "Consulta y valida alertas", "HTTPS / REST")
+Rel(decisionMaker, ac07, "Consume alertas", "HTTPS / REST")
+
+Rel(ac01, copernicus, "Descarga escenas", "HTTPS / STAC")
+Rel(ac01, tn03, "Guarda raster crudo", "S3 API")
+Rel(ac01, tn06, "Publica jobs de ingesta", "Kafka")
+
+Rel(tn06, ac02, "Entrega jobs de preproceso", "Kafka")
+Rel(ac02, ac03, "Envía tiles limpios", "gRPC")
+Rel(ac03, ac04, "Envía vectores fusionados", "gRPC")
+Rel(ac04, tn03, "Lee artefactos de modelo", "S3 API")
+Rel(ac04, ac08, "Busca patrones similares", "gRPC")
+Rel(ac04, ac05, "Envía probabilidades", "Kafka")
+Rel(ac05, ac06, "Envía detecciones filtradas", "Kafka")
+
+Rel(ac07, ac06, "Enruta peticiones", "HTTPS")
+Rel(ac06, tn04, "Persiste alertas y auditoría", "SQL")
+Rel(ac06, tn05, "Indexa embeddings", "SQL")
+Rel(ac06, govSystems, "Notifica alertas", "Webhook")
+
+Rel(ac07, ac09, "Publica métricas, logs y trazas", "OTLP")
+
+note right of ac02
+  <b>Cómo escala el pipeline</b>
+  Cada etapa escala por <b>profundidad de cola</b>, no por CPU:
+  las pasadas satelitales son ráfagas, no carga uniforme.
+  Sin este criterio, el autoescalado reaccionaría tarde.
+end note
+
+@enduml

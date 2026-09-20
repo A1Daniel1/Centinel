@@ -1,0 +1,41 @@
+C4Container
+    UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
+    title Container Diagram - Monitoring Platform
+
+    Person(analyst, "Territorial Analyst", "Reviews and validates alerts")
+    Person(decisionMaker, "Institutional Decision Maker", "Acts on prioritized alerts")
+
+    System_Boundary(platform, "Illegal Territorial Activity Monitoring Platform") {
+        Container(ac01, "Satellite Ingestion Service", "Python / FastAPI", "Scheduled ingestion of Sentinel-1, Sentinel-2 and Landsat scenes")
+        Container(ac02, "Preprocessing Service", "Python / GDAL", "Cloud masking, radiometric calibration and co-registration")
+        Container(ac03, "Feature Fusion Service", "Python", "Aligns and fuses optical and SAR feature signatures")
+        Container(ac04, "Multi-Label Inference Service", "PyTorch / gRPC", "Joint multi-label classification of the three phenomena")
+        Container(ac05, "False-Alarm Filter Service", "Python", "Temporal consistency and spatial context suppression")
+        Container(ac06, "Alert Management Service", "Python / FastAPI", "Alert lifecycle, persistence and audit records")
+        Container(ac07, "Alert API Gateway", "Envoy", "External facade, authentication and rate limiting")
+        Container(ac08, "Vector Similarity Service", "Python", "Similarity search over historical territorial patterns")
+        Container(ac09, "Observability Platform", "Prometheus / Grafana / OpenTelemetry", "Metrics, logs and distributed traces for the platform")
+        ContainerDb(tn04, "PostGIS Database", "PostgreSQL + PostGIS", "Territories, detections, alerts and audit")
+        ContainerDb(tn03, "Object Storage", "S3-compatible", "Raw and preprocessed raster scenes")
+        ContainerDb(tn05, "Vector Store", "pgvector (pilot) / dedicated engine (production)", "Embedding index for similarity search")
+        ContainerQueue(tn06, "Message Broker", "Redis Streams", "Asynchronous ingestion and inference jobs")
+    }
+
+    System_Ext(copernicus, "Copernicus and Google Earth Engine", "Satellite imagery sources")
+    System_Ext(govSystems, "Government Information Systems", "SMByC and ministerial portals")
+
+    Rel(ac01, ac02, "Envía jobs de escenas", "Events")
+    Rel(ac02, ac03, "Envía tiles limpios", "gRPC")
+    Rel(ac03, ac04, "Envía vectores fusionados", "gRPC")
+    Rel(ac04, ac05, "Envía probabilidades multietiqueta", "Events")
+    Rel(ac05, ac06, "Envía detecciones filtradas", "Events")
+    Rel(ac07, ac06, "Enruta peticiones", "HTTP")
+    Rel(analyst, ac07, "Consulta y valida alertas", "HTTPS / REST")
+    Rel(decisionMaker, ac07, "Consume alertas", "HTTPS / REST")
+    Rel(ac01, copernicus, "Descarga escenas", "HTTPS / STAC")
+    Rel(ac07, govSystems, "Envía alertas", "Webhook")
+    Rel(ac06, tn04, "Guarda alertas y auditoría", "SQL")
+    Rel(ac01, tn03, "Guarda raster crudo", "S3 API")
+    Rel(ac04, ac08, "Busca patrones similares", "gRPC")
+    Rel(ac01, tn06, "Publica jobs", "Streams")
+    Rel(ac07, ac09, "Publica métricas, logs y trazas", "OTLP")

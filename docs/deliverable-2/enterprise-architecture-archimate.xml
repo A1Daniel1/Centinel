@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model
+    xmlns="http://www.archimatetool.com/archimate"
+    xmlns:archimate="http://www.archimatetool.com/archimate"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.archimatetool.com/archimate http://www.archimatetool.com/archimate/archimate3.1-model-exchange.xsd"
+    identifier="model-illegal-territorial-monitoring"
+    name="Early Detection of Illegal Territorial Activities via Satellite Imagery: A Cloud-Based Multi-Phenomenon Monitoring Architecture"
+    version="1.0"
+    date="2026-09-19">
+    <documentation>Modelo de arquitectura empresarial ArchiMate 3.1 del sistema de deteccion temprana multi-fenomeno de actividades territoriales ilicitas mediante imagenes satelitales. Cubre las capas de negocio, aplicacion y tecnologia. Idioma de nombres en ingles; documentacion en espanol. Companion del documento executive-review-II.md.</documentation>
+
+    <elements>
+        <!-- ================= Business Layer ================= -->
+        <element identifier="ba01" type="BusinessActor">
+            <name>Environmental and Territorial Authority</name>
+            <documentation>Autoridad ambiental (por ejemplo IDEAM) responsable del monitoreo de deforestacion y consumidor primario de las alertas.</documentation>
+        </element>
+        <element identifier="ba02" type="BusinessActor">
+            <name>Judicial and Security Authority</name>
+            <documentation>Fiscalia y Fuerza Publica; consumen alertas con potencial valor probatorio para la accion judicial y operativa.</documentation>
+        </element>
+        <element identifier="ba03" type="BusinessActor">
+            <name>Indigenous Territorial Authority</name>
+            <documentation>Autoridades y resguardos indigenas; veedores del territorio y sujetos de proteccion de datos sensibles.</documentation>
+        </element>
+        <element identifier="ba04" type="BusinessActor">
+            <name>International Monitoring Organization</name>
+            <documentation>UNODC y SIMCI; aportan cifras oficiales de coca y EVOA y validan la metodologia de referencia.</documentation>
+        </element>
+
+        <element identifier="br01" type="BusinessRole">
+            <name>Territorial Analyst</name>
+            <documentation>Interpreta y valida las alertas georreferenciadas y ajusta los umbrales de sensibilidad del filtro de falsas alarmas.</documentation>
+        </element>
+        <element identifier="br02" type="BusinessRole">
+            <name>Monitoring Operator</name>
+            <documentation>Opera la plataforma y supervisa la ingesta, la salud del pipeline y los indicadores operativos.</documentation>
+        </element>
+        <element identifier="br03" type="BusinessRole">
+            <name>Institutional Decision Maker</name>
+            <documentation>Decide operativos e intervenciones a partir de las alertas priorizadas y validadas.</documentation>
+        </element>
+
+        <element identifier="bcp01" type="BusinessCapability">
+            <name>Multi-Phenomenon Detection</name>
+            <documentation>Capacidad de detectar de forma conjunta deforestacion, mineria ilegal y cultivos de coca sobre el mismo territorio.</documentation>
+        </element>
+        <element identifier="bcp02" type="BusinessCapability">
+            <name>Cloud-Cover Resilient Monitoring</name>
+            <documentation>Capacidad de mantener observabilidad del territorio pese a la nubosidad tropical persistente, mediante fusion optica y SAR.</documentation>
+        </element>
+        <element identifier="bcp03" type="BusinessCapability">
+            <name>Early Alert Management</name>
+            <documentation>Capacidad de convertir una deteccion en una alerta gestionada, validada y priorizada para la accion institucional.</documentation>
+        </element>
+        <element identifier="bcp04" type="BusinessCapability">
+            <name>Territorial Intelligence and Traceability</name>
+            <documentation>Capacidad de atribuir la causa del cambio de cobertura y de trazar de forma auditable cada alerta entregada.</documentation>
+        </element>
+        <element identifier="bcp05" type="BusinessCapability">
+            <name>Institutional Integration</name>
+            <documentation>Capacidad de que los sistemas del Estado reutilicen las alertas mediante interfaces estandarizadas.</documentation>
+        </element>
+
+        <element identifier="bp01" type="BusinessProcess">
+            <name>Satellite Data Acquisition</name>
+            <documentation>Ingesta programada de escenas Sentinel-1, Sentinel-2 y Landsat desde Copernicus o Google Earth Engine.</documentation>
+        </element>
+        <element identifier="bp02" type="BusinessProcess">
+            <name>Preprocessing and Calibration</name>
+            <documentation>Enmascarado de nubes, calibracion radiometrica y corregistro espacial de las escenas.</documentation>
+        </element>
+        <element identifier="bp03" type="BusinessProcess">
+            <name>Multi-Source Feature Fusion</name>
+            <documentation>Alineacion temporal y espacial de las firmas optica y SAR en un vector de caracteristicas comun.</documentation>
+        </element>
+        <element identifier="bp04" type="BusinessProcess">
+            <name>Joint Multi-Label Classification</name>
+            <documentation>Clasificacion simultanea de los tres fenomenos sobre el vector fusionado.</documentation>
+        </element>
+        <element identifier="bp05" type="BusinessProcess">
+            <name>False-Alarm Filtering</name>
+            <documentation>Supresion de alertas espurias mediante consistencia temporal, contexto espacial y umbrales configurables.</documentation>
+        </element>
+        <element identifier="bp06" type="BusinessProcess">
+            <name>Alert Publication and Delivery</name>
+            <documentation>Materializacion, publicacion y entrega de la alerta georreferenciada a los consumidores institucionales.</documentation>
+        </element>
+
+        <!-- ================= Data Objects ================= -->
+        <element identifier="do01" type="DataObject">
+            <name>Sentinel-1 SAR Scene</name>
+            <documentation>Escena radar de banda C; fuente clave para mantener la observacion durante periodos de nubosidad.</documentation>
+        </element>
+        <element identifier="do02" type="DataObject">
+            <name>Sentinel-2 Optical Scene</name>
+            <documentation>Escena multiespectral; la resolucion de trabajo de 10 a 20 metros es un parametro de diseno; base de las firmas espectrales de los tres fenomenos.</documentation>
+        </element>
+        <element identifier="do03" type="DataObject">
+            <name>Landsat Scene</name>
+            <documentation>Escena optica complementaria que aporta profundidad a la serie historica.</documentation>
+        </element>
+        <element identifier="do04" type="DataObject">
+            <name>Preprocessed Raster Tile</name>
+            <documentation>Raster enmascarado, calibrado radiometricamente y corregistrado, listo para la fusion.</documentation>
+        </element>
+        <element identifier="do05" type="DataObject">
+            <name>Fused Feature Vector</name>
+            <documentation>Representacion multi-fuente alineada por celda territorial, combinando optico y SAR.</documentation>
+        </element>
+        <element identifier="do06" type="DataObject">
+            <name>Georeferenced Alert</name>
+            <documentation>Entidad de alerta con geometria, etiquetas multi-fenomeno, confianza y estado del ciclo de vida.</documentation>
+        </element>
+        <element identifier="do07" type="DataObject">
+            <name>Ground-Truth Label</name>
+            <documentation>Etiqueta oficial de IDEAM o UNODC usada para entrenamiento y evaluacion del modelo.</documentation>
+        </element>
+        <element identifier="do08" type="DataObject">
+            <name>Alert Audit Record</name>
+            <documentation>Bitacora inmutable de quien valido o descarto una alerta, con marca temporal y trazabilidad.</documentation>
+        </element>
+        <element identifier="do09" type="DataObject">
+            <name>Embedding Index</name>
+            <documentation>Indice vectorial para la busqueda por similitud de patrones territoriales historicos.</documentation>
+        </element>
+
+        <!-- ================= Application Layer ================= -->
+        <element identifier="ac01" type="ApplicationComponent">
+            <name>Satellite Ingestion Service</name>
+            <documentation>Descarga programada de escenas Sentinel-1, Sentinel-2 y Landsat y registro de sus metadatos.</documentation>
+        </element>
+        <element identifier="ac02" type="ApplicationComponent">
+            <name>Preprocessing Service</name>
+            <documentation>Enmascarado de nubes, calibracion radiometrica y corregistro espacial de las escenas ingeridas.</documentation>
+        </element>
+        <element identifier="ac03" type="ApplicationComponent">
+            <name>Feature Fusion Service</name>
+            <documentation>Alineacion y combinacion de las firmas optica y SAR en un vector comun.</documentation>
+        </element>
+        <element identifier="ac04" type="ApplicationComponent">
+            <name>Multi-Label Inference Service</name>
+            <documentation>Servicio de inferencia del clasificador conjunto multi-etiqueta, desplegado sobre GPU con registro de modelos.</documentation>
+        </element>
+        <element identifier="ac05" type="ApplicationComponent">
+            <name>False-Alarm Filter Service</name>
+            <documentation>Aplica consistencia temporal, contexto espacial y umbrales configurables para suprimir falsas alarmas.</documentation>
+        </element>
+        <element identifier="ac06" type="ApplicationComponent">
+            <name>Alert Management Service</name>
+            <documentation>Persiste y gestiona el ciclo de vida de la alerta georreferenciada y su registro de auditoria.</documentation>
+        </element>
+        <element identifier="ac07" type="ApplicationComponent">
+            <name>Alert API Gateway</name>
+            <documentation>Fachada de exposicion externa; aplica autenticacion, autorizacion, cuotas y enrutamiento.</documentation>
+        </element>
+        <element identifier="ac08" type="ApplicationComponent">
+            <name>Vector Similarity Service</name>
+            <documentation>Busqueda por similitud sobre el indice de embeddings para recuperar patrones historicos analogos.</documentation>
+        </element>
+        <element identifier="ac09" type="ApplicationComponent">
+            <name>Observability Platform</name>
+            <documentation>Recoleccion y visualizacion de metricas, logs y trazas de toda la tuberia de deteccion.</documentation>
+        </element>
+
+        <element identifier="ai01" type="ApplicationInterface">
+            <name>Alert Delivery REST API</name>
+            <documentation>Contrato REST especificado en OpenAPI 3.0.3 para consultar y gestionar alertas georreferenciadas.</documentation>
+        </element>
+        <element identifier="ai02" type="ApplicationInterface">
+            <name>Inference gRPC Interface</name>
+            <documentation>Contrato de comunicacion de alta eficiencia entre el servicio de fusion y el de inferencia.</documentation>
+        </element>
+        <element identifier="ai03" type="ApplicationInterface">
+            <name>Institutional Integration Interface</name>
+            <documentation>Contrato de entrega desacoplada mediante webhooks y exportaciones hacia sistemas del Estado.</documentation>
+        </element>
+
+        <!-- ================= Technology Layer ================= -->
+        <element identifier="tn01" type="Node">
+            <name>Kubernetes Cluster</name>
+            <documentation>Cluster gestionado que aloja los servicios de aplicacion y la plataforma de observabilidad.</documentation>
+        </element>
+        <element identifier="tn02" type="Node">
+            <name>GPU Inference Node</name>
+            <documentation>Grupo de nodos con GPU dedicado a la inferencia multi-etiqueta, con autoescalado a cero.</documentation>
+        </element>
+        <element identifier="tn03" type="Node">
+            <name>Object Storage Node</name>
+            <documentation>Infraestructura de almacenamiento de objetos para escenas crudas y preprocesadas.</documentation>
+        </element>
+        <element identifier="tn04" type="Node">
+            <name>PostGIS Database Node</name>
+            <documentation>Nodo de base de datos relacional geoespacial que persiste territorios, detecciones y alertas.</documentation>
+        </element>
+        <element identifier="tn05" type="Node">
+            <name>Vector Database Node</name>
+            <documentation>Nodo del motor de busqueda vectorial que aloja el indice de embeddings.</documentation>
+        </element>
+        <element identifier="tn06" type="Node">
+            <name>Message Broker Node</name>
+            <documentation>Nodo del bus asincrono que desacopla los trabajos de ingesta e inferencia.</documentation>
+        </element>
+
+        <element identifier="ss01" type="SystemSoftware">
+            <name>Kubernetes</name>
+            <documentation>Software de orquestacion de contenedores, autoescalado y planificacion de cargas.</documentation>
+        </element>
+        <element identifier="ss02" type="SystemSoftware">
+            <name>Docker</name>
+            <documentation>Runtime de contenedores que empaqueta cada microservicio como imagen inmutable.</documentation>
+        </element>
+        <element identifier="ss03" type="SystemSoftware">
+            <name>PostGIS</name>
+            <documentation>Extension geoespacial de PostgreSQL para tipos geometricos e indices espaciales.</documentation>
+        </element>
+        <element identifier="ss04" type="SystemSoftware">
+            <name>S3-Compatible Object Storage</name>
+            <documentation>Almacenamiento de objetos con cifrado y politicas de ciclo de vida por capas.</documentation>
+        </element>
+        <element identifier="ss05" type="SystemSoftware">
+            <name>Vector Store Engine</name>
+            <documentation>Motor de indice vectorial para busqueda por similitud.</documentation>
+        </element>
+        <element identifier="ss06" type="SystemSoftware">
+            <name>Message Broker</name>
+            <documentation>Cola y bus asincrono para trabajos de ingesta, preprocesamiento e inferencia.</documentation>
+        </element>
+        <element identifier="ss07" type="SystemSoftware">
+            <name>Observability Stack</name>
+            <documentation>Pila de observabilidad compuesta por Prometheus, Grafana y OpenTelemetry Collector.</documentation>
+        </element>
+
+        <element identifier="ts01" type="TechnologyService">
+            <name>Container Orchestration Service</name>
+            <documentation>Servicio de orquestacion de contenedores ofrecido a los componentes de aplicacion.</documentation>
+        </element>
+        <element identifier="ts02" type="TechnologyService">
+            <name>Object Storage Service</name>
+            <documentation>Servicio de almacenamiento de objetos consumido por la ingesta y el preprocesamiento.</documentation>
+        </element>
+        <element identifier="ts03" type="TechnologyService">
+            <name>Managed Database Service</name>
+            <documentation>Servicio de base de datos gestionada con respaldo, cifrado y failover Multi-AZ.</documentation>
+        </element>
+        <element identifier="ts04" type="TechnologyService">
+            <name>Identity and Access Service</name>
+            <documentation>Servicio de identidad federada y emision de tokens OAuth2 y JWT.</documentation>
+        </element>
+    </elements>
+
+    <relationships>
+        <!-- Business layer relationships -->
+        <relationship identifier="rel-001" type="Assignment" source="br01" target="ba01">
+            <documentation>El analista territorial ejerce su rol para la autoridad ambiental.</documentation>
+        </relationship>
+        <relationship identifier="rel-002" type="Assignment" source="br02" target="ba01">
+            <documentation>El operador de monitoreo pertenece a la operacion institucional de la autoridad ambiental.</documentation>
+        </relationship>
+        <relationship identifier="rel-003" type="Assignment" source="br03" target="ba02">
+            <documentation>El decisor institucional actua en el ambito judicial y de seguridad.</documentation>
+        </relationship>
+        <relationship identifier="rel-004" type="Assignment" source="br01" target="bp05">
+            <documentation>El analista territorial ejecuta la validacion del filtro de falsas alarmas.</documentation>
+        </relationship>
+        <relationship identifier="rel-005" type="Assignment" source="br02" target="bp01">
+            <documentation>El operador de monitoreo es responsable de la adquisicion de datos satelitales.</documentation>
+        </relationship>
+        <relationship identifier="rel-006" type="Flow" source="bp01" target="bp02">
+            <documentation>La escena cruda alimenta el proceso de preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-007" type="Flow" source="bp02" target="bp03">
+            <documentation>El raster preprocesado alimenta la fusion multi-fuente.</documentation>
+        </relationship>
+        <relationship identifier="rel-008" type="Flow" source="bp03" target="bp04">
+            <documentation>El vector fusionado alimenta la clasificacion conjunta.</documentation>
+        </relationship>
+        <relationship identifier="rel-009" type="Flow" source="bp04" target="bp05">
+            <documentation>La probabilidad multi-etiqueta alimenta el filtro de falsas alarmas.</documentation>
+        </relationship>
+        <relationship identifier="rel-010" type="Flow" source="bp05" target="bp06">
+            <documentation>La alerta filtrada se publica y entrega.</documentation>
+        </relationship>
+        <relationship identifier="rel-011" type="Realization" source="bp01" target="bcp02">
+            <documentation>La ingesta multi-sensor realiza la capacidad de monitoreo robusto ante nubosidad.</documentation>
+        </relationship>
+        <relationship identifier="rel-012" type="Realization" source="bp03" target="bcp02">
+            <documentation>La fusion optica y SAR realiza la capacidad de monitoreo robusto ante nubosidad.</documentation>
+        </relationship>
+        <relationship identifier="rel-013" type="Realization" source="bp04" target="bcp01">
+            <documentation>La clasificacion conjunta realiza la deteccion multi-fenomeno.</documentation>
+        </relationship>
+        <relationship identifier="rel-014" type="Realization" source="bp05" target="bcp03">
+            <documentation>El filtrado realiza la gestion de alerta temprana.</documentation>
+        </relationship>
+        <relationship identifier="rel-015" type="Realization" source="bp06" target="bcp05">
+            <documentation>La publicacion y entrega realizan la integracion institucional.</documentation>
+        </relationship>
+        <relationship identifier="rel-016" type="Realization" source="bp06" target="bcp04">
+            <documentation>La publicacion con auditoria realiza la trazabilidad territorial.</documentation>
+        </relationship>
+
+        <!-- Data relationships -->
+        <relationship identifier="rel-017" type="Composition" source="do05" target="do01">
+            <documentation>La escena SAR se agrega como componente del vector fusionado.</documentation>
+        </relationship>
+        <relationship identifier="rel-018" type="Composition" source="do05" target="do02">
+            <documentation>La escena optica se agrega como componente del vector fusionado.</documentation>
+        </relationship>
+        <relationship identifier="rel-019" type="Composition" source="do05" target="do03">
+            <documentation>La escena Landsat aporta la componente historica del vector fusionado.</documentation>
+        </relationship>
+        <relationship identifier="rel-020" type="Flow" source="do01" target="do04">
+            <documentation>La escena SAR fluye al preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-021" type="Flow" source="do02" target="do04">
+            <documentation>La escena optica fluye al preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-022" type="Flow" source="do03" target="do04">
+            <documentation>La escena Landsat fluye al preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-023" type="Flow" source="do04" target="do05">
+            <documentation>El raster preprocesado se vectoriza y fusiona.</documentation>
+        </relationship>
+        <relationship identifier="rel-024" type="Flow" source="do05" target="do06">
+            <documentation>El vector fusionado produce la alerta georreferenciada.</documentation>
+        </relationship>
+        <relationship identifier="rel-025" type="Access" source="do07" target="do05">
+            <documentation>Las etiquetas oficiales etiquetan el vector de entrenamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-026" type="Composition" source="do06" target="do08">
+            <documentation>La alerta compone su propio registro de auditoria.</documentation>
+        </relationship>
+        <relationship identifier="rel-027" type="Flow" source="do06" target="do09">
+            <documentation>La alerta se indexa como embedding para busqueda por similitud.</documentation>
+        </relationship>
+        <relationship identifier="rel-028" type="Access" source="do08" target="do06">
+            <documentation>La auditoria referencia de forma inmutable la alerta.</documentation>
+        </relationship>
+
+        <!-- Application layer relationships -->
+        <relationship identifier="rel-029" type="Flow" source="ac01" target="ac02">
+            <documentation>La escena ingerida alimenta el preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-030" type="Flow" source="ac02" target="ac03">
+            <documentation>El raster limpio alimenta la fusion de caracteristicas.</documentation>
+        </relationship>
+        <relationship identifier="rel-031" type="Flow" source="ac03" target="ac04">
+            <documentation>El vector fusionado alimenta la inferencia multi-etiqueta.</documentation>
+        </relationship>
+        <relationship identifier="rel-032" type="Flow" source="ac04" target="ac05">
+            <documentation>Las probabilidades alimentan el filtro de falsas alarmas.</documentation>
+        </relationship>
+        <relationship identifier="rel-033" type="Flow" source="ac05" target="ac06">
+            <documentation>Las alertas filtradas se persisten y gestionan.</documentation>
+        </relationship>
+        <relationship identifier="rel-034" type="Serving" source="ac06" target="ac07">
+            <documentation>El servicio de gestion de alertas sirve a la fachada de API.</documentation>
+        </relationship>
+        <relationship identifier="rel-035" type="Realization" source="ac07" target="ai01">
+            <documentation>La fachada materializa la API REST de entrega de alertas.</documentation>
+        </relationship>
+        <relationship identifier="rel-036" type="Realization" source="ac04" target="ai02">
+            <documentation>El servicio de inferencia expone la interfaz gRPC.</documentation>
+        </relationship>
+        <relationship identifier="rel-037" type="Realization" source="ac06" target="ai03">
+            <documentation>La gestion de alertas materializa la interfaz de integracion institucional.</documentation>
+        </relationship>
+        <relationship identifier="rel-038" type="Serving" source="ac08" target="ac04">
+            <documentation>El servicio vectorial enriquece la inferencia con patrones historicos analogos.</documentation>
+        </relationship>
+        <relationship identifier="rel-039" type="Serving" source="ac09" target="ac07">
+            <documentation>La observabilidad da soporte operativo a la fachada y a la tuberia.</documentation>
+        </relationship>
+        <relationship identifier="rel-040" type="Access" source="ac01" target="do01">
+            <documentation>El servicio de ingesta accede a las escenas SAR.</documentation>
+        </relationship>
+        <relationship identifier="rel-041" type="Access" source="ac01" target="do02">
+            <documentation>El servicio de ingesta accede a las escenas opticas.</documentation>
+        </relationship>
+        <relationship identifier="rel-042" type="Access" source="ac06" target="do06">
+            <documentation>La gestion de alertas persiste y consulta alertas georreferenciadas.</documentation>
+        </relationship>
+        <relationship identifier="rel-043" type="Access" source="ac06" target="do08">
+            <documentation>La gestion de alertas escribe el registro de auditoria.</documentation>
+        </relationship>
+        <relationship identifier="rel-044" type="Access" source="ac08" target="do09">
+            <documentation>El servicio vectorial consulta el indice de embeddings.</documentation>
+        </relationship>
+
+        <!-- Technology layer relationships -->
+        <relationship identifier="rel-045" type="Composition" source="tn01" target="ss01">
+            <documentation>El cluster compone el software de orquestacion Kubernetes.</documentation>
+        </relationship>
+        <relationship identifier="rel-046" type="Composition" source="tn01" target="ss02">
+            <documentation>El cluster ejecuta el runtime de contenedores Docker.</documentation>
+        </relationship>
+        <relationship identifier="rel-047" type="Composition" source="tn02" target="ss02">
+            <documentation>Los nodos GPU ejecutan el mismo runtime de contenedores.</documentation>
+        </relationship>
+        <relationship identifier="rel-048" type="Composition" source="tn03" target="ss04">
+            <documentation>El nodo de almacenamiento materializa el almacenamiento de objetos.</documentation>
+        </relationship>
+        <relationship identifier="rel-049" type="Composition" source="tn04" target="ss03">
+            <documentation>El nodo de base de datos ejecuta PostGIS.</documentation>
+        </relationship>
+        <relationship identifier="rel-050" type="Composition" source="tn05" target="ss05">
+            <documentation>El nodo vectorial ejecuta el motor de indice.</documentation>
+        </relationship>
+        <relationship identifier="rel-051" type="Composition" source="tn06" target="ss06">
+            <documentation>El nodo de mensajeria ejecuta el broker.</documentation>
+        </relationship>
+        <relationship identifier="rel-052" type="Composition" source="tn01" target="ss07">
+            <documentation>El cluster aloja la pila de observabilidad.</documentation>
+        </relationship>
+        <relationship identifier="rel-053" type="Realization" source="ss01" target="ts01">
+            <documentation>Kubernetes realiza el servicio de orquestacion de contenedores.</documentation>
+        </relationship>
+        <relationship identifier="rel-054" type="Realization" source="ss04" target="ts02">
+            <documentation>El almacenamiento de objetos realiza el servicio de storage.</documentation>
+        </relationship>
+        <relationship identifier="rel-055" type="Realization" source="ss03" target="ts03">
+            <documentation>PostGIS realiza el servicio de base de datos gestionada.</documentation>
+        </relationship>
+        <relationship identifier="rel-056" type="Serving" source="tn01" target="ac01">
+            <documentation>El cluster aloja el servicio de ingesta.</documentation>
+        </relationship>
+        <relationship identifier="rel-057" type="Serving" source="tn01" target="ac02">
+            <documentation>El cluster aloja el servicio de preprocesamiento.</documentation>
+        </relationship>
+        <relationship identifier="rel-058" type="Serving" source="tn01" target="ac03">
+            <documentation>El cluster aloja el servicio de fusion de caracteristicas.</documentation>
+        </relationship>
+        <relationship identifier="rel-059" type="Serving" source="tn02" target="ac04">
+            <documentation>El pool GPU aloja el servicio de inferencia multi-etiqueta.</documentation>
+        </relationship>
+        <relationship identifier="rel-060" type="Serving" source="tn01" target="ac05">
+            <documentation>El cluster aloja el filtro de falsas alarmas.</documentation>
+        </relationship>
+        <relationship identifier="rel-061" type="Serving" source="tn01" target="ac06">
+            <documentation>El cluster aloja el servicio de gestion de alertas.</documentation>
+        </relationship>
+        <relationship identifier="rel-062" type="Serving" source="tn01" target="ac07">
+            <documentation>El cluster aloja la fachada de API.</documentation>
+        </relationship>
+        <relationship identifier="rel-063" type="Serving" source="tn05" target="ac08">
+            <documentation>El nodo vectorial sirve al servicio de similitud.</documentation>
+        </relationship>
+        <relationship identifier="rel-064" type="Serving" source="tn01" target="ac09">
+            <documentation>El cluster aloja la plataforma de observabilidad.</documentation>
+        </relationship>
+        <relationship identifier="rel-065" type="Serving" source="tn03" target="ac01">
+            <documentation>El almacenamiento de objetos sirve a la ingesta y al raster.</documentation>
+        </relationship>
+        <relationship identifier="rel-066" type="Serving" source="tn04" target="ac06">
+            <documentation>La base PostGIS sirve a la gestion de alertas.</documentation>
+        </relationship>
+        <relationship identifier="rel-067" type="Serving" source="tn06" target="ac04">
+            <documentation>El broker desacopla y alimenta los trabajos de inferencia.</documentation>
+        </relationship>
+        <relationship identifier="rel-068" type="Association" source="ba03" target="bp05">
+            <documentation>La autoridad territorial indigena participa en la validacion territorial de las alertas.</documentation>
+        </relationship>
+        <relationship identifier="rel-069" type="Association" source="ba04" target="do07">
+            <documentation>La organizacion internacional de monitoreo aporta las etiquetas oficiales de referencia.</documentation>
+        </relationship>
+        <relationship identifier="rel-070" type="Serving" source="ts04" target="ac07">
+            <documentation>El servicio de identidad sirve a la fachada de API para la autenticacion y emision de tokens.</documentation>
+        </relationship>
+        <relationship identifier="rel-071" type="Serving" source="ts04" target="ac06">
+            <documentation>El servicio de identidad valida la autorizacion de las operaciones sensibles sobre alertas.</documentation>
+        </relationship>
+    </relationships>
+
+    <views>
+        <view identifier="view-capability-map" type="CapabilityMap">
+            <name>Capability Map View</name>
+            <documentation>Mapa de capacidades de negocio con los actores y roles que las habilitan y los procesos que las realizan.</documentation>
+            <node identifier="vn-001" elementRef="bcp01"/>
+            <node identifier="vn-002" elementRef="bcp02"/>
+            <node identifier="vn-003" elementRef="bcp03"/>
+            <node identifier="vn-004" elementRef="bcp04"/>
+            <node identifier="vn-005" elementRef="bcp05"/>
+            <node identifier="vn-006" elementRef="ba01"/>
+            <node identifier="vn-007" elementRef="ba02"/>
+            <node identifier="vn-008" elementRef="ba03"/>
+            <node identifier="vn-009" elementRef="ba04"/>
+            <node identifier="vn-010" elementRef="br01"/>
+            <node identifier="vn-011" elementRef="br02"/>
+            <node identifier="vn-012" elementRef="br03"/>
+            <node identifier="vn-013" elementRef="bp01"/>
+            <node identifier="vn-014" elementRef="bp02"/>
+            <node identifier="vn-015" elementRef="bp03"/>
+            <node identifier="vn-016" elementRef="bp04"/>
+            <node identifier="vn-017" elementRef="bp05"/>
+            <node identifier="vn-018" elementRef="bp06"/>
+        </view>
+
+        <view identifier="view-system-integration" type="SystemIntegrationStructure">
+            <name>System Integration Structure View</name>
+            <documentation>Vista de integracion del sistema: componentes de aplicacion, interfaces expuestas y nodos tecnologicos que los alojan.</documentation>
+            <node identifier="vn-101" elementRef="ac01"/>
+            <node identifier="vn-102" elementRef="ac02"/>
+            <node identifier="vn-103" elementRef="ac03"/>
+            <node identifier="vn-104" elementRef="ac04"/>
+            <node identifier="vn-105" elementRef="ac05"/>
+            <node identifier="vn-106" elementRef="ac06"/>
+            <node identifier="vn-107" elementRef="ac07"/>
+            <node identifier="vn-108" elementRef="ac08"/>
+            <node identifier="vn-109" elementRef="ac09"/>
+            <node identifier="vn-110" elementRef="ai01"/>
+            <node identifier="vn-111" elementRef="ai02"/>
+            <node identifier="vn-112" elementRef="ai03"/>
+            <node identifier="vn-113" elementRef="tn01"/>
+            <node identifier="vn-114" elementRef="tn02"/>
+            <node identifier="vn-115" elementRef="tn05"/>
+            <node identifier="vn-116" elementRef="tn06"/>
+            <node identifier="vn-117" elementRef="ts01"/>
+            <node identifier="vn-118" elementRef="ts04"/>
+        </view>
+
+        <view identifier="view-technology-deployment" type="TechnologyDeployment">
+            <name>Technology Deployment View</name>
+            <documentation>Vista de despliegue tecnologico: nodos, software de sistema y servicios tecnologicos que sostienen la plataforma.</documentation>
+            <node identifier="vn-201" elementRef="tn01"/>
+            <node identifier="vn-202" elementRef="tn02"/>
+            <node identifier="vn-203" elementRef="tn03"/>
+            <node identifier="vn-204" elementRef="tn04"/>
+            <node identifier="vn-205" elementRef="tn05"/>
+            <node identifier="vn-206" elementRef="tn06"/>
+            <node identifier="vn-207" elementRef="ss01"/>
+            <node identifier="vn-208" elementRef="ss02"/>
+            <node identifier="vn-209" elementRef="ss03"/>
+            <node identifier="vn-210" elementRef="ss04"/>
+            <node identifier="vn-211" elementRef="ss05"/>
+            <node identifier="vn-212" elementRef="ss06"/>
+            <node identifier="vn-213" elementRef="ss07"/>
+            <node identifier="vn-214" elementRef="ts01"/>
+            <node identifier="vn-215" elementRef="ts02"/>
+            <node identifier="vn-216" elementRef="ts03"/>
+            <node identifier="vn-217" elementRef="ts04"/>
+        </view>
+    </views>
+
+</archimate:model>
