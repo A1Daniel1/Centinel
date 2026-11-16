@@ -1,0 +1,11 @@
+earthengine-api
+rasterio
+geopandas
+shapely
+numpy
+pandas
+scikit-learn
+torch
+torchvision
+fastapi
+uvicorn
