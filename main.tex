@@ -2,9 +2,15 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{graphicx}
+\usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
 \usepackage{multirow}
+\usepackage{float}
+\usepackage{tabularx}
+\usepackage[section]{placeins}
+\usepackage{pdflscape}
+\usepackage{longtable}
 \usepackage{xurl}
 \usepackage[
   colorlinks=true,
@@ -30,7 +36,7 @@
   Luiza Mariana Gonzalez Veloza \\
   Daniel Alexander Ahumada León
 }
-\date{August 2026}
+\date{November 2026}
 % ----------------------------------------------------------------
 
 \begin{document}
@@ -50,7 +56,7 @@
     Daniel Alexander Ahumada León
     \par}
     \vfill
-    {\large August 2026 \par}
+    {\large November 2026 \par}
 \end{titlepage}
 
 \tableofcontents
@@ -67,28 +73,92 @@ authorities can respond.
 Satellite imagery provides the raw data necessary to close this gap, but no existing
 system jointly detects these three phenomena with sufficient accuracy and operational
 frequency to support near-real-time institutional response.
-The closest precedent, Riocampo et al.\ (2023) achieved only 60-70\% detection
+The closest precedent---Riocampo et al.\ (2023)---achieved only 60--70\% detection
 rates using optical imagery alone, without addressing false-alarm management or
 cloud-cover robustness.
 This project proposes a cloud-based, scalable monitoring architecture that ingests
-multi-source satellite data (optical and SAR radar), applies a multi-label
+multi-source satellite data (optical, with SAR radar as an optional module), applies a multi-label
 classification pipeline to jointly detect the three phenomena, and exposes alerts
 through a structured API consumed by institutional stakeholders.
 The architecture is designed for deployment at national scale, with components
 spanning automated satellite ingestion, preprocessing, multi-source feature fusion,
 joint classification, false-alarm filtering, and alert delivery to existing
 government information systems.
-As a proof of concept, the proposal includes a scoped pilot that would evaluate
-the central design decision of the architecture: whether a joint multi-label
-classifier outperforms three independent detectors on a region with documented
-overlap of the three phenomena, using precision, recall, and false alarm rate as
-primary metrics.
-The expected contribution is a reproducible reference architecture for
-large-scale illegal activity monitoring and an evidence-based answer to that
-design question.
+The central design hypothesis is that jointly detecting the three phenomena with
+a shared multi-label model, exploiting their geographic co-occurrence, lowers
+false alarms relative to three independent detectors.
+Testing it requires spatial ground truth from IDEAM and UNODC/SIMCI, which we
+could not obtain within the project timeline.
+We therefore adjusted the research question and the minimum viable product to
+openly available data: a pilot on forest-loss detection in Caquetá and Putumayo
+(Hansen/GLAD labels) that asks whether adding Sentinel-1 radar to Sentinel-2
+imagery improves detection and robustness to cloud occlusion.
+Optical plus SAR input matched optical-only detection on clean imagery (mean
+average precision 0.778 vs.\ 0.776 over three seeds) and showed a small
+advantage under synthetic occlusion (+0.022 average precision, in all three
+seeds), but recall (0.64) fell short of the 0.75 criterion, so the adjusted
+question was not answered in favor of fusion.
+The original hypothesis remains viable and untested: since the pilot could not
+demonstrate a benefit from radar, we defer it on cost grounds and propose that
+the first test use optical imagery only, keeping SAR as an optional module.
+The FastAPI inference service was deployed to Google Cloud Run on 17 November 2026; two reference requests reproduced the Colab probabilities, without constituting a new model evaluation.
+The contribution is a reproducible reference architecture, a working
+detection pipeline, and an honest account of what the available data could and
+could not establish.
 \end{abstract}
 
 \newpage
+
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+\paragraph{Problem.}
+Colombian authorities learn of deforestation, illegal alluvial mining, and coca
+cultivation months to a year after they happen, because each phenomenon is
+monitored through a separate institutional pipeline.
+
+\paragraph{Proposal.}
+Centinel is a cloud architecture that ingests satellite imagery, detects
+territorial change, filters false alarms, and delivers georeferenced alerts
+through an API. Its central design hypothesis is that detecting the three
+phenomena jointly, with a shared multi-label model, lowers false alarms
+compared with three independent detectors.
+
+\paragraph{What we did.}
+The official ground truth needed to test that hypothesis (IDEAM, UNODC/SIMCI,
+EVOA) could not be obtained in time. We built a working pipeline on open data
+and used it to ask a related question: does adding Sentinel-1 radar to
+Sentinel-2 imagery improve annual forest-loss detection? The pilot covers
+about 18{,}000\,km$^2$ of Caquet\'a and Putumayo and 11{,}764 image patches. The FastAPI container was deployed on Google Cloud Run and checked on 17 November 2026: two reference queries reproduced the Colab outputs (0.9993 and 0.0338). This is a deployment check, not a new model evaluation.
+
+\paragraph{What we found.}
+Radar gave no meaningful gain on clean imagery (average precision 0.778 vs.\
+0.776) and a small gain under synthetic cloud occlusion (+0.022). Recall was
+0.64 against a target of 0.75, so the pilot did not meet its own criteria.
+The central hypothesis was not tested and remains viable.
+
+\paragraph{Cost.}
+Measured and derived estimates indicate that compute and storage are small
+(order of tens to hundreds of US dollars per year for one national annual
+pass). The costs that matter are the Earth Engine license status
+(about 6{,}000 US dollars per year if the service is classed as commercial),
+the services we did not price (database, orchestration, observability), and
+staff. The Cloud Run demonstration tests were covered by Google Cloud trial credit, with a USD~1 budget alert; no monthly operating cost was measured.
+
+\paragraph{Main risks.}
+Two have already occurred: missing ground truth and recall below target.
+The remaining ones concern whether the labels reflect illegality, licensing,
+false-alarm trust, generalization to other regions, and the governance of
+sensitive location data. The demonstration endpoint is public and unauthenticated; production access controls are not implemented.
+
+\paragraph{Recommendation.}
+Neither scale nor stop. Proceed to a conditional second phase whose first step
+is to obtain official ground truth and test the joint-versus-independent
+hypothesis with optical imagery only. Do not commit to radar ingestion or to
+national coverage until that test and a regional deployment succeed.
+
+\newpage
+
 
 % =============================================================
 % INTRODUCTION
@@ -104,23 +174,24 @@ Deforestation, illegal gold mining (EVOA), and coca cultivation are currently
 tracked through separate pipelines: IDEAM's SMBYC publishes deforestation alerts
 quarterly; UNODC and SIMCI release coca cultivation figures annually; and EVOA
 reporting operates on a similarly long cycle.
-Indigenous communities and \textit{resguardos} in affected regions often the
-first to perceive on-the-ground changes and national bodies such as IDEAM, the
+Indigenous communities and \textit{resguardos} in affected regions---often the
+first to perceive on-the-ground changes---and national bodies such as IDEAM, the
 Ministry of Environment, and the security forces may not receive official alerts
 until several months or up to a year after the damage occurs~\cite{mongabay_siona2023}.
 
 Critically, these three phenomena do not occur in isolation.
-Data from IDEAM and UNODC show that they frequently overlap in the same geographic
-areas and during the same periods, suggesting a structural co-occurrence that the
-current siloed monitoring approach fails to exploit.
+UNODC data show that alluvial gold mining and coca cultivation frequently overlap
+in the same territories~\cite{unodc_evoa2022}; their relation to deforestation is
+more nuanced (Section~\ref{sec:problem}), which points to a partial co-occurrence
+that the current siloed monitoring approach does not exploit.
 
 \subsection{Problem}
 
 Satellite imagery is already freely and continuously available, so the core
 bottleneck is not data access but the capacity to process that data at operational
 frequency and at the required spatial precision.
-The persistent monitoring gap between the moment a territorial change occurs and
-the moment an authority can act on it creates a window in which evidence
+The persistent monitoring gap---between the moment a territorial change occurs and
+the moment an authority can act on it---creates a window in which evidence
 disappears, perpetrators relocate, and ecological damage compounds.
 
 This raises a concrete technical question: \textit{is it better to continue
@@ -136,23 +207,26 @@ not only its sensitivity.
 This work makes the following contributions at this stage of the project:
 
 \begin{itemize}
-    \item Using official data from IDEAM and UNODC, we provide quantitative and
-    qualitative evidence that deforestation, illegal mining, and coca cultivation
-    co-occur systematically across Colombian territory and are accelerating.
+    \item Using official data from IDEAM and UNODC, we document that illicit
+    mining and coca cultivation overlap in a large share of the territories where
+    either occurs, that their overlap with deforestation is partial, and that the
+    areas of coca and illicit mining have grown while national deforestation
+    rebounded in 2024 and 2025 after its 2023 minimum.
     \item We conduct a critical comparative review of existing satellite monitoring
-    systems: SMBYC, Global Forest Watch / GLAD, CoMiMo, and Riocampo et al.\
-    (2023) and demonstrate that none of them simultaneously addresses
+    systems---SMBYC, Global Forest Watch (GLAD and RADD alerts), CoMiMo, and Riocampo et al.\ (2023)---and demonstrate that none of them simultaneously addresses
     multi-phenomenon joint detection, cloud-cover robustness, and false-alarm
     management at operational scale.
     \item We propose a large-scale cloud-based monitoring architecture whose
     principal components include an automated satellite ingestion pipeline,
-    multi-source feature fusion (optical + SAR), a joint multi-label
+    multi-source feature fusion (optical, with SAR as an optional module), a joint multi-label
     classification layer, a false-alarm filtering stage, and a structured
     alert delivery API consumable by existing government platforms.
-    \item We define a scoped proof-of-concept pilot and explicit go/no-go
-    criteria to evaluate the central architectural design decision joint
-    versus independent detection before committing resources to full
-    deployment.
+    \item We report a reduced proof-of-concept pilot. Because official
+    ground truth for the central hypothesis (joint versus independent detection)
+    could not be obtained in time, the pilot tests a related, data-feasible
+    question---whether SAR improves forest-loss detection---with explicit
+    go/no-go criteria. The criteria were not met, and we derive from this how
+    the original hypothesis should be tested next.
 \end{itemize}
 
 \subsection{Document Structure}
@@ -166,6 +240,8 @@ solution and architecture direction.
 Section~\ref{sec:architecture} describes the proposed system architecture.
 Section~\ref{sec:prototype} presents the prototype implementation.
 Section~\ref{sec:results} reports the results obtained.
+Section~\ref{sec:business} addresses cost, governance, security, risk, and a
+roadmap.
 Finally, Section~\ref{sec:conclusions} summarizes conclusions and outlines
 future work.
 
@@ -196,7 +272,7 @@ cycle begins from scratch.
 
 \subsection{Quantitative Aspects}
 
-Official figures show accelerating trends across all three phenomena, summarized
+Official figures show rising areas of coca cultivation and illicit mining and a rebound in deforestation after its 2023 minimum, summarized
 in Table~\ref{tab:quant}.
 
 \begin{table}[ht]
@@ -214,13 +290,14 @@ in Table~\ref{tab:quant}.
  & 2025 & 119{,}483 & +5.2\% & El Tiempo~\cite{eltiempo_deforestacion2025} \\
 \midrule
 \multirow{3}{*}{Coca cultivation}
- & 2021 & 204{,}000 & ---    & UNODC / SIMCI \\
- & 2022 & 230{,}000 & +13\%  & UNODC / SIMCI \\
+ & 2022 & 230{,}000 & ---    & UNODC / SIMCI \\
  & 2023 & 253{,}000 & +10\%  & UNODC / SIMCI~\cite{minjusticia_coca2023} \\
+ & 2024 & 261{,}000 & +3.5\% & UNODC / SIMCI~\cite{simci2024} \\
 \midrule
-\multirow{2}{*}{Illegal gold mining (EVOA)}
- & 2021 & 57{,}984 & ---   & UNODC \\
- & 2022 & 63{,}123 & +8\%  & UNODC~\cite{infobae_evoa2023} \\
+\multirow{3}{*}{Alluvial gold mining (EVOA)}
+ & 2023 & 105{,}060 & ---    & UNODC / MinEnergía~\cite{minenergia_evoa2025} \\
+ & 2024 & 113{,}310 & +7.9\% & UNODC / MinEnergía \\
+ & 2025 & 118{,}410 & +4.5\% & UNODC / MinEnergía~\cite{minenergia_evoa2025} \\
 \bottomrule
 \end{tabular}%
 }
@@ -229,20 +306,26 @@ in Table~\ref{tab:quant}.
 \footnotesize
 \textit{Note:} In 2023, deforestation reached its lowest level in 23 years before
 rising sharply in 2024.
-In 2022, illegal alluvial gold extraction (EVOA) accounted for 73\% of the total
-area affected by this activity~\cite{infobae_evoa2023}.
+In 2025, 75\% of the area with evidence of alluvial gold exploitation
+(118{,}410\,ha) was classified as illicit, about 88{,}860\,ha~\cite{minenergia_evoa2025}.
+The UNODC coca report for 2025 had not been published at the time of writing, so
+the UNODC series ends in 2024 (the SIMCI 2024 report appeared in June 2026).
+The National Police's SIIMA system, which uses its own methodology, reports
+roughly 258{,}000--262{,}000\,ha for 2025 depending on the cut-off date
+(August or December)~\cite{siima2025}; the two series are not directly comparable.
 \end{flushleft}
 \end{table}
 
 The relationship among these phenomena is not uniform but is structurally
 significant.
-In 2021, UNODC found that 44\% of territories with alluvial gold extraction also
-presented coca cultivation, and that in these overlapping zones illicit activity
-reached 87\%.
-However, the relationship with deforestation is more nuanced: IDEAM estimates
-that only approximately 13\% of deforestation is attributable to illicit crops,
-while cattle ranching expansion and land grabbing are currently among its primary
-drivers.
+The UNODC EVOA 2025 report found that about 45\% of the area with evidence of
+alluvial gold exploitation on land coincided with areas that had coca cultivation
+in 2024~\cite{minenergia_evoa2025}; the EVOA 2022 report had already shown
+overlap in 76 of 101 mining municipalities~\cite{unodc_evoa2022}.
+However, the relationship with deforestation is more nuanced: Colombia's Ministry of Environment estimates
+(2023) that only approximately 13\% of annual deforestation is linked to illicit crops~\cite{minambiente_13},
+while IDEAM reports identify pasture conversion for land grabbing and extensive
+cattle ranching among its primary direct causes.
 This heterogeneity is precisely what makes joint detection both challenging and
 informative: a system that can distinguish causes of land-cover change, rather
 than merely detecting that change occurred, provides substantially more actionable
@@ -262,7 +345,7 @@ published quarterly Early Deforestation Alerts (ATD) using MODIS and Landsat
 imagery since 2016~\cite{ideam_smbyc,smbyc_atd_github}.
 The \textbf{UNODC}, through \textbf{SIMCI}, produces annual coca cultivation
 monitoring reports~\cite{minjusticia_coca2023}, and through its \textbf{EVOA}
-reports tracks illegal alluvial gold extraction~\cite{infobae_evoa2023}.
+reports tracks illegal alluvial gold extraction~\cite{unodc_evoa2022}.
 Investigative journalism outlets such as \textbf{Mongabay Latam} complement these
 institutional sources by documenting community-level effects and the practical
 limitations of state intervention in remote
@@ -272,7 +355,7 @@ regions~\cite{mongabay_siona2023,mongabay_riopure2026}.
 
 \textbf{Saavedra-Romero (2017)} developed an early change-detection model for
 forest cover achieving 79\% accuracy, which served as the methodological
-foundation for CoMiMo~\cite{comimo_urosario} a system for detecting illegal
+foundation for CoMiMo~\cite{comimo_urosario}---a system for detecting illegal
 mining developed at Universidad del Rosario.
 CoMiMo demonstrated the feasibility of near-real-time satellite-based detection
 for a single phenomenon, but its scope is restricted to mining and it has not
@@ -282,10 +365,10 @@ The most directly related work is \textbf{Riocampo et al.\ (2023)}~\cite{riocamp
 who attempted to jointly detect illegal mining, deforestation, and illicit crops
 from satellite imagery using convolutional neural networks applied to optical
 imagery.
-Their system achieved a detection rate of 60-70\%, which falls below the
+Their system achieved a detection rate of 60--70\%, which falls below the
 operational threshold that would be needed for institutional deployment.
 Critically, the study does not report precision, false positive rates, or
-any mechanism for managing false alarms an omission that is especially
+any mechanism for managing false alarms---an omission that is especially
 significant given that false alerts erode institutional trust in automated
 systems and can trigger costly on-the-ground verifications.
 Additionally, Riocampo et al.\ relied exclusively on optical imagery, which is
@@ -308,9 +391,22 @@ The SMByC's ATD pipeline~\cite{smbyc_atd_github} uses MODIS for high-frequency,
 low-resolution coverage and Landsat for high-resolution but less frequent updates.
 This dual-sensor design illustrates the classic trade-off between temporal
 resolution and spatial resolution in satellite monitoring, and it motivates the
-addition of SAR (Synthetic Aperture Radar) imagery which is available at
-competitive temporal resolution and is not affected by cloud cover as a third
+addition of SAR (Synthetic Aperture Radar) imagery---which is available at
+competitive temporal resolution and is not affected by cloud cover---as a third
 data source in our proposed architecture.
+
+SAR is not new in operational deforestation monitoring.
+The RADD alerts, produced by Wageningen University from Sentinel-1 and
+available on Global Forest Watch, detect forest disturbances in the humid
+tropics in near real time and have been extended to the Amazon
+basin~\cite{reiche2021radd,gfw_radd}; Global Forest Watch's integrated alerts
+combine optical and radar systems~\cite{gfw_integrated}.
+Research on optical--SAR fusion for deforestation under cloud cover in the
+Brazilian Amazon reports that fusion improves detection~\cite{ferrari2023}.
+These systems and studies address forest disturbance only; what remains open,
+and what this work targets, is the joint detection of deforestation, illegal
+mining and coca cultivation together with false-alarm management and delivery
+to institutional consumers.
 
 \subsection{Comparative Summary}
 
@@ -326,12 +422,13 @@ relevant existing systems.
 \toprule
 \textbf{System} & \textbf{Deforestation} & \textbf{Mining} & \textbf{Coca} & \textbf{SAR} & \textbf{Key Limitation} \\
 \midrule
-SMByC / ATD         & \checkmark & --         & --         & -- & Quarterly cadence; no cause attribution \\
-GLAD (GFW)          & \checkmark & --         & --         & -- & Optical only; no cause attribution \\
+SMByC / ATD         & \checkmark & --         & --         & -- & Quarterly cadence; causes described in reports, not per detection \\
+GLAD (GFW)          & \checkmark & --         & --         & -- & Optical alerts; broad driver classes, not legality; no mining or coca \\
+RADD (GFW)          & \checkmark & --         & --         & \checkmark & Radar-only alerts; detects disturbance, not legality; no mining or coca \\
 CoMiMo              & --         & \checkmark & --         & -- & Single phenomenon; not publicly deployed \\
 FACSAT-1            & --         & \checkmark & --         & -- & Narrow scope; no multi-label output \\
 Riocampo et al.\ (2023) & \checkmark & \checkmark & \checkmark & -- & 60--70\% recall; no false-alarm management; optical only \\
-\textbf{This work}  & \checkmark & \checkmark & \checkmark & \checkmark & Pilot scope; to be validated \\
+\textbf{This work (proposed)} & \checkmark & \checkmark & \checkmark & (\checkmark) & Proposed architecture; SAR optional; pilot covers deforestation only \\
 \bottomrule
 \end{tabular}%
 }
@@ -349,7 +446,7 @@ Riocampo et al.\ (2023) & \checkmark & \checkmark & \checkmark & -- & 60--70\% r
 The comparative review in Section~\ref{sec:sota} reveals a gap with two
 interlocking dimensions.
 The first is \textit{coverage}: no currently operational system jointly detects
-all three phenomena deforestation, illegal mining, and coca cultivation with
+all three phenomena---deforestation, illegal mining, and coca cultivation---with
 sufficient accuracy for institutional use.
 The second is \textit{operationalizability}: even the only prior work that
 attempted joint detection (Riocampo et al., 2023) is a standalone
@@ -368,15 +465,21 @@ The principal design decisions that distinguish this proposal from prior work ar
 \begin{enumerate}
     \item \textbf{Multi-source fusion:} The architecture would ingest both
     optical imagery (Sentinel-2, Landsat) and SAR imagery (Sentinel-1) to
-    maintain observability during cloud-cover periods the primary technical
-    differentiator from Riocampo et al.\ (2023) and all operational systems
-    currently reviewed.
+    maintain observability during cloud-cover periods, which Riocampo et al.\
+    (2023) do not address. Radar alone is not new in operational monitoring
+    (RADD alerts~\cite{reiche2021radd}); what this proposal adds is its
+    combination with optical data inside a joint detector of three phenomena. The pilot (Section~\ref{sec:results}) did not show a
+    decisive benefit of SAR on annual composites, so in the first validation of
+    the joint hypothesis SAR is treated as an optional module.
     \item \textbf{Multi-label classification:} Rather than operating three
     independent binary classifiers in isolation, the proposed system would
     evaluate whether a shared multi-label model trained on the joint
     distribution of the three phenomena achieves better calibration and lower
     false alarm rates, particularly in zones of co-occurrence. This is the
-    central architectural hypothesis to be validated by the pilot.
+    central architectural hypothesis of the proposal. The pilot reported here
+    does not test it, because the required ground truth could not be obtained
+    in time; Section~\ref{sec:conclusions} describes how it should be tested
+    next.
     \item \textbf{Explicit false-alarm management:} A post-classification
     filtering stage would apply temporal consistency checks and spatial
     context analysis to suppress spurious alerts, with a tunable
@@ -388,49 +491,72 @@ The principal design decisions that distinguish this proposal from prior work ar
     institutional platforms such as SMBYC dashboards and government data
     portals.
     \item \textbf{Cloud-native scalability:} The architecture would be built
-    on cloud-native principles containerized microservices, managed object
-    storage for satellite data, auto-scaling inference endpoints so that
+    on cloud-native principles---containerized microservices, managed object
+    storage for satellite data, auto-scaling inference endpoints---so that
     geographic coverage could be expanded from a pilot region to the national
     territory without proportional increases in operational cost or manual
     intervention.
 \end{enumerate}
 
 \subsection{Proof-of-Concept Pilot and Decision Criteria}
+\label{sec:pilot-criteria}
 
 The full architecture is intended for large-scale deployment with the
 institutional and computational resources of an agency such as IDEAM or a
 national environmental technology fund.
-As a first validation step, the proposal includes a proof-of-concept pilot
-focused on the single most technically uncertain component: the question of
-whether joint multi-label classification outperforms three independent
-binary classifiers on multi-source satellite data.
+As a first validation step, the proposal included a proof-of-concept pilot.
 
-Such a pilot would be structured as follows:
+\paragraph{Original plan and data constraint.}
+The pilot was originally designed to test the central hypothesis directly:
+whether a joint multi-label classifier outperforms three independent detectors
+in a region where deforestation, illegal alluvial mining, and coca cultivation
+co-occur.
+That test needs spatial ground-truth layers from IDEAM (official deforestation),
+UNODC/SIMCI (coca cultivation), and the national alluvial-mining evidence
+(EVOA).
+We could not obtain these layers within the project timeline, and without them
+the hypothesis cannot be evaluated.
+
+\paragraph{Adjusted question.}
+Rather than present an unevaluated design, we adjusted the question and the
+minimum viable product to the data that were openly available: Sentinel imagery
+and the global Hansen / GLAD forest-loss product.
+The adjusted pilot asks a related, verifiable question about the architecture's
+data-fusion decision: whether adding Sentinel-1 radar to Sentinel-2 optical
+imagery improves the detection of annual forest loss, and whether it makes
+detection more robust when part of the optical image is obscured, as is common
+in Colombia's tropical regions.
+It is therefore restricted to deforestation and does not test joint detection.
+
+The adjusted pilot is structured as follows:
 \begin{itemize}
-    \item \textbf{Study area:} A geographic region in Colombia with
-    documented, spatially verified overlap of the three phenomena during
-    a known time window, such as parts of Caquetá or Putumayo where
-    IDEAM and UNODC data confirm co-occurrence.
-    \item \textbf{Data:} Labeled time-series combining Sentinel-1 (SAR)
-    and Sentinel-2 (optical) imagery, using official IDEAM and UNODC
-    ground-truth records as labels.
-    \item \textbf{Experimental comparison:} Two model configurations trained
-    on identical data splits (a) three independent binary classifiers and
-    (b) a single shared multi-label classifier evaluated under the same
-    conditions.
-    \item \textbf{Metrics:} Precision, recall, F1 score, and false positive
-    rate reported per phenomenon and aggregated across the label space.
+    \item \textbf{Study area:} A region within Caquetá or Putumayo, Colombian
+    departments with documented forest loss.
+    \item \textbf{Data:} Annual Sentinel-2 (optical) and Sentinel-1 (SAR)
+    composites for 2021--2023, paired as (previous year, evaluated year), with
+    global forest-loss labels from the Hansen / GLAD dataset~\cite{hansen2013}
+    as ground truth.
+    \item \textbf{Experimental comparison:} Two configurations of the same
+    network trained on identical data splits---(a) optical imagery only and
+    (b) optical plus SAR imagery.
+    \item \textbf{Metrics:} Precision, recall, F1 score, false positive rate,
+    and average precision, reported both on the standard test set and under
+    synthetic cloud occlusion of the optical channels.
 \end{itemize}
 
-The joint approach would be considered architecturally preferable and
-worth scaling within the full platform if it achieves: (a) recall
-$\geq 0.75$ on at least two of the three phenomena, (b) precision
-$\geq 0.70$ on all three, and (c) false positive rate $\leq 0.20$
-across the combined label space.
-If these thresholds are not met, the architecture would either be revised
-to use independent detectors per phenomenon, or the fusion strategy would
-be reconsidered, before committing further resources to full-scale
-deployment.
+The fusion approach was to be considered worth adopting within the full
+platform if: (a) it achieves recall $\geq 0.75$, precision $\geq 0.70$, and
+false positive rate $\leq 0.20$ on the test set; and (b) it improves average
+precision over the optical-only configuration, on average and in at least two
+of three random seeds.
+Its behavior under
+occlusion is a secondary outcome.
+The thresholds in (a) are design targets that we set without an empirical basis
+from prior work, and criterion (a) measures the absolute performance of the
+fusion model, whereas only criterion (b) isolates the contribution of radar;
+a better-designed test would have kept the two questions separate.
+Section~\ref{sec:results} reports that these criteria were not met, and
+Section~\ref{sec:conclusions} draws the consequence for the original hypothesis.
 
 
 % =============================================================
@@ -439,32 +565,318 @@ deployment.
 \section{Architecture}
 \label{sec:architecture}
 
-% TODO: Describe the proposed system architecture, components, data flows, and design decisions.
-% Suggested components to cover:
-%   1. Data ingestion layer (Sentinel-1, Sentinel-2 via Copernicus API or Google Earth Engine)
-%   2. Pre-processing pipeline (cloud masking, radiometric calibration, co-registration)
-%   3. Feature extraction and multi-source fusion
-%   4. Multi-label classification model
-%   5. Post-processing / false-alarm filter
-%   6. Alert storage and REST API
-%   7. Institutional consumer interfaces
-% Also describe: cloud infrastructure choices, scalability strategy, data storage approach.
+The proposed system is described using the C4 model at three levels of
+abstraction: the system context (Level~1), the container decomposition
+(Level~2), and the component breakdown of the detection core (Level~3), which
+contains the two containers that carry the contribution of this proposal: the
+ML inference service and the false-alarm filter.
+In all diagrams, an arrow points in the direction of the call or data flow, and
+its label names the event or operation; blue boxes are parts of Centinel,
+gray boxes are external systems, and dark blue boxes are people.
+
+% ----------------------------------------------------------------
+\subsection{Level 1 --- System Context}
+
+Figure~\ref{fig:c4-l1} shows Centinel as a single box between the actors that
+supply it with data and those that consume its output.
+On the supply side, it pulls Sentinel-1 and Sentinel-2 scenes from the
+\textbf{Copernicus Data Space}, Landsat scenes from \textbf{USGS / NASA},
+reference forest-loss labels from \textbf{UMD / Global Forest Watch}, and
+official ground-truth layers from \textbf{IDEAM--SMByC} and
+\textbf{UNODC / SIMCI} (coca and alluvial mining) for training and validation.
+On the consumption side, five types of people interact with the platform:
+environmental analysts (IDEAM, MinAmbiente) and illicit-economies analysts
+(UNODC / SIMCI, Ministry of Justice) review and query alerts; enforcement
+officers (security forces, Fiscal\'ia, regional environmental authorities)
+receive prioritized alerts; community monitors of indigenous territories report
+what they find on the ground; and platform operators run the pipelines.
+Alerts also leave the platform through a government interoperability platform
+and a notification gateway (SMS, WhatsApp, e-mail).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{Cetinel_TDSE-C4_L1_Context.png}
+\caption{C4 Level 1: system context of the Centinel platform.}
+\label{fig:c4-l1}
+\end{figure}
+
+This boundary makes the system's responsibilities explicit: it does not produce
+new satellite data, nor does it make enforcement decisions.
+Its sole function is to reduce the latency between a territorial change occurring
+and an institutional consumer receiving an actionable, reliable alert about it.
+
+% ----------------------------------------------------------------
+\subsection{Level 2 --- Container Decomposition}
+
+The platform is decomposed into seventeen containers, shown in
+Figure~\ref{fig:c4-l2} and described in Table~\ref{tab:containers}.
+To keep the diagram readable, the people already shown in Level~1 do not
+reappear; only the external systems that touch a container are drawn.
+The figure reads in three zones.
+
+\paragraph{Detection pipeline (top rows).}
+The pipeline follows one satellite scene from arrival to alert.
+A \textbf{workflow orchestrator} schedules the \textbf{scene discovery} service,
+which searches the external satellite catalogs and publishes a
+\textit{SceneFound} event; the \textbf{ingestion service} downloads the scene,
+stores it in the \textbf{imagery data lake} and publishes \textit{SceneStored}.
+The \textbf{preprocessing service} turns the raw scene into analysis-ready tiles
+(cloud masking, calibration, co-registration), writes them to the lake and
+publishes \textit{TileReady}.
+The \textbf{ML inference service} consumes that event and emits detections, which
+the \textbf{false-alarm filter} validates before writing confirmed alerts to the
+\textbf{alert database}; each confirmed alert triggers the \textbf{notification
+service}, which delivers it through the external notification gateway.
+Because the stages communicate through events instead of direct calls, each one
+can scale, fail and be retried independently.
+
+\paragraph{MLOps loop (left, middle rows).}
+The \textbf{labeling service} harmonizes the official ground-truth layers into
+versioned label sets; the \textbf{training pipeline} combines them with tiles from
+the data lake, trains and evaluates models, and registers them in the
+\textbf{model registry}, from which the inference service loads the production
+model.
+The \textbf{monitoring service} promotes a model or triggers retraining based on
+the outcomes verified in the field, which it obtains through the alert API.
+This loop lets field verdicts improve future models; it is not covered by the
+pilot of Section~\ref{sec:prototype}.
+
+\paragraph{Access layer (right, lower rows).}
+Analysts use the \textbf{web dashboard} and community monitors use an
+offline-first \textbf{field verification app}; both, together with the
+government interoperability platform, reach the platform only through the
+\textbf{API gateway}.
+The gateway validates every token against the government identity provider,
+applies per-institution roles, and routes authorized calls to the \textbf{alert
+API}, the only container that reads and writes the alert database on behalf of
+users.
+
+\begin{landscape}
+\thispagestyle{empty}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,height=0.78\textheight,keepaspectratio]{Cetinel_TDSE-C4_L2_Containers.png}
+\caption{C4 Level 2: container decomposition of the Centinel platform.}
+\label{fig:c4-l2}
+\end{figure}
+\vfill
+\centering\thepage
+\end{landscape}
+
+{\small
+\begin{longtable}{@{}p{3.3cm}p{3.7cm}p{8cm}@{}}
+\caption{Container decomposition of the Centinel platform}
+\label{tab:containers}\\
+\toprule
+\textbf{Container} & \textbf{Technology} & \textbf{Problem solved} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Container} & \textbf{Technology} & \textbf{Problem solved} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Workflow orchestrator & Apache Airflow / Cloud Composer & Schedules discovery, backfills and batch runs; retries failed steps. \\
+Scene discovery & Python / STAC client & Finds new Sentinel-1/2 and Landsat scenes over the area of interest. \\
+Ingestion service & Python / Cloud Run jobs & Downloads and clips scenes and converts them to cloud-optimized GeoTIFF. \\
+Preprocessing service & Python / GDAL on GKE & Cloud masking, calibration, co-registration and tiling; optional SAR module. \\
+ML inference service & PyTorch / TorchServe, GPU autoscaling & Runs the multi-label model and produces per-label scores. \\
+False-alarm filter & Python rules engine & Applies temporal persistence, spatial coherence and exclusion masks before an alert is issued. \\
+Notification service & Python worker & Routes confirmed alerts to subscribers by region, phenomenon and priority. \\
+Imagery data lake & Object storage (GCS), COG / Zarr & Single source of raw scenes, analysis-ready tiles and label rasters. \\
+Alert database & PostgreSQL + PostGIS & Stores alerts with provenance, field verifications and an append-only audit trail. \\
+Alert API & FastAPI / REST & Query, filter and acknowledge alerts; record field verifications. \\
+API gateway & Kong / Apigee & Authentication, per-institution roles, rate limiting and access logging. \\
+Labeling and ground-truth service & Python / Label Studio & Harmonizes official layers into curated, versioned label sets. \\
+Training pipeline & Vertex AI Pipelines / PyTorch & Trains and evaluates joint and independent models with fixed geographic splits. \\
+Model registry & MLflow & Versions models with data lineage, metrics and promotion stage. \\
+Model and field monitoring & Python / Evidently / Grafana & Tracks drift and field-verified precision; promotes, rolls back or triggers retraining. \\
+Web dashboard & React / MapLibre & Map, filters and alert workflow for institutional analysts. \\
+Field verification app & React Native, offline-first & Shows nearby alerts and captures geotagged photos and verdicts in areas with poor connectivity. \\
+\end{longtable}
+}
+
+% ----------------------------------------------------------------
+\subsection{Level 3 --- Detection Core}
+
+Figure~\ref{fig:c4-l3} opens the two containers where the central hypothesis is
+tested.
+Inside the \textbf{ML inference service}, a consumer receives each
+\textit{TileReady} event; the tile loader reads the previous-year and current
+tiles from the data lake; the feature assembler builds the bitemporal input
+tensor (adding SAR channels only if that optional module is enabled); and a
+multi-label classifier, with a shared encoder and one head per phenomenon,
+produces calibrated scores that the publisher emits as detection events.
+The model loader keeps the production model from the registry in memory and
+swaps it when a new version is promoted.
+Inside the \textbf{false-alarm filter}, each detection passes four sequential
+checks: temporal persistence across consecutive observations, spatial coherence
+(minimum mapping unit and neighbor agreement), exclusion masks (legal mining
+titles, non-forest areas, known crops), and a threshold-and-priority policy that
+operators can tune, for example to prioritize parks and indigenous territories.
+Only detections that pass all four checks become alerts: the alert writer stores
+them with their provenance and emits the confirmation event that drives
+notification.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{Cetinel_TDSE-C4_L3_Components.png}
+\caption{C4 Level 3: components of the ML inference service and the
+false-alarm filter.}
+\label{fig:c4-l3}
+\end{figure}
+
+% ----------------------------------------------------------------
+\subsection{Scalability and Cloud Infrastructure}
+
+The architecture is designed on cloud-native principles.
+All compute containers are stateless and deployed via containers
+(Docker / Kubernetes), so individual components can be scaled horizontally
+without affecting the rest of the pipeline; state lives only in the data lake,
+the alert database and the model registry.
+Satellite tiles are stored in managed object storage, decoupling data volume
+growth from compute costs.
+The ML inference service sits behind an auto-scaling endpoint, so peak loads
+triggered by new image batches do not require manual capacity planning.
+Cross-cutting concerns are handled uniformly: OpenTelemetry for observability,
+a secret manager and customer-managed encryption keys, infrastructure as code,
+dead-letter queues on every event topic, and data-protection controls to be
+reviewed against Colombian Law 1581 of 2012 (Section~\ref{sec:governance}).
+
+Geographic expansion --- from a pilot region to national coverage --- requires
+adding new ingestion schedules and storage partitions without architectural
+changes.
+This separates the \textit{validation problem} (does the approach work?) from
+the \textit{scaling problem} (can it cover the whole country?), allowing the
+former to be answered cheaply before committing to the latter.
 
 
 % =============================================================
 % PROTOTYPE
 % =============================================================
+
 \section{Prototype}
 \label{sec:prototype}
 
-% TODO: Describe the proof-of-concept pilot and its scope within the overall architecture.
-% Suggested content:
-%   - Clarify that this is a pilot to validate the central design decision, not a full deployment
-%   - Which component(s) of the architecture the pilot covers
-%   - Proposed technology stack (e.g., Google Earth Engine for data access, Python/PyTorch for modeling,
-%     AWS S3 or GCP Cloud Storage for satellite data, cloud ML endpoints for inference)
-%   - Dataset: study region (e.g., Caquetá/Putumayo), time window, labeling source (IDEAM/UNODC), size
-%   - Model configurations to be compared: independent vs. joint multi-label classifier
+The Centinel proof of concept implements and evaluates the satellite-data and machine-learning portion of the proposed architecture. 
+
+Its executed workflow comprises image acquisition through Google Earth Engine, construction of a labeled bitemporal dataset, training of two convolutional classifiers, and evaluation on geographically separated test data. 
+
+A minimal REST interface was implemented and deployed on Google Cloud Run on 17 November 2026. Live HTTP requests exercised the Earth Engine retrieval path and reproduced the Colab outputs for two reference locations. This confirms the behavior of the deployed demonstration container for those requests, not the reliability or operational readiness of the full alert-delivery architecture.
+
+\subsection{Pilot Scope and Research Question}
+\label{subsec:prototype-scope}
+
+The original Centinel architecture targets the joint detection of deforestation, illegal alluvial mining, and coca cultivation. A direct comparison between a shared multi-label model and three independent detectors would require spatial reference data for all three phenomena. The necessary layers from IDEAM and UNODC/SIMCI/EVOA were not available within the development period. Therefore, the implemented pilot addresses a narrower and independently testable question: \emph{does adding Sentinel-1 synthetic-aperture radar (SAR) imagery to Sentinel-2 optical imagery improve annual forest-loss detection, particularly when optical observations are partially obscured?}
+
+The pilot is restricted to binary patch-level forest-loss detection. It does not classify mining or coca cultivation, infer the legal status of land-cover change, or generate real-time national alerts. Its purpose is to test a data-fusion design decision and provide reusable technical components for a later multi-phenomenon implementation.
+
+\subsection{Study Area, Satellite Sources, and Dataset Construction}
+\label{subsec:prototype-data}
+
+The study region lies within Caquet\'a and Putumayo, Colombia, and is defined in geographic coordinates by the bounding box $(-75.5,\,0.8,\,-74.0,\,1.8)$ (longitude minimum, latitude minimum, longitude maximum, latitude maximum; EPSG:4326). Its approximate surface area is $18{,}000\ \mathrm{km}^{2}$. The region was divided into 24 geographic tiles of $0.25^{\circ}\times 0.25^{\circ}$. Using the Google Earth Engine Python API, the team exported annual composite imagery for 2021, 2022, and 2023, as well as a forest-loss label layer for each tile: 72 image exports and 24 label exports, for 96 completed tasks reported in the repository README.
+
+
+
+Each annual image composite contains six bands: four Sentinel-2 surface-reflectance bands (B2, B3, B4, and B8) and two Sentinel-1 radar polarizations (VV and VH). Sentinel-2 observations were screened using the scene-classification layer to exclude clouds, cloud shadows, cirrus, and other unusable pixels; each annual optical composite was formed using a median reducer. Sentinel-1 observations were filtered to interferometric wide-swath mode with both VV and VH polarizations, and were likewise summarized as annual median composites. The working export scale was 20 m per pixel.
+
+The reference labels came from the Hansen/GLAD global forest-change product, using its \texttt{lossyear} band and retaining only areas with at least 30\% tree cover in the year 2000 (Hansen \emph{et al.}, 2013). The label identifies the year of tree-cover loss; it does not identify the cause of the loss or establish that an activity was illegal.
+
+The dataset builder extracted non-overlapping $64\times64$-pixel patches, each approximately 1.28 km on a side. For each location, it paired the previous year's composite with the evaluated year's composite, using the comparisons 2021--2022 and 2022--2023. A patch was labeled positive when at least 2\% of its pixels were marked as forest loss during the evaluated year. Remaining missing pixels were imputed using their respective band means; patches with more than 20\% missing data were discarded. To mitigate class imbalance, the builder retained a random 50\% of negative patches before dataset splitting.
+
+The executed dataset-construction run produced \textbf{11,764 bitemporal patches}, including \textbf{2,461 positive patches (20.9\%)} and 9,303 negative patches. The pipeline saved the image tensors, labels, and geospatial metadata as \texttt{X.npy}, \texttt{Y.npy}, and \texttt{meta.csv}. The positive proportion is specific to the sampled dataset and should not be interpreted as the natural prevalence of forest loss across the region.
+
+\subsection{Model Implementation and Training}
+\label{subsec:prototype-model}
+
+The two experimental configurations use the same ResNet-18 backbone, adapted to receive multi-band satellite patches and to output one binary classification logit. The initial convolution was replaced to match the input channel count, the initial max-pooling layer was removed to preserve spatial detail on small patches, and the final layer was replaced with a single-output linear classifier. Both models were trained from scratch rather than initialized with ImageNet weights.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Model configurations in the executed comparison.}
+\label{tab:prototype-configurations}
+\begin{tabular}{|p{0.22\linewidth}|p{0.49\linewidth}|p{0.14\linewidth}|}
+\hline
+\textbf{Configuration} & \textbf{Input for two consecutive years} & \textbf{Channels} \\ \hline
+Optical baseline & Sentinel-2 B2, B3, B4, and B8 in each year & 8 \\ \hline
+Optical + SAR fusion & Sentinel-2 B2, B3, B4, and B8 plus Sentinel-1 VV and VH in each year & 12 \\ \hline
+\end{tabular}
+\end{table}
+
+The experimental code used PyTorch with a class-weighted binary cross-entropy loss (with logits), the AdamW optimizer, a cosine learning-rate schedule, and geometric augmentation through random horizontal and vertical flips and rotations. Training was run for 15 epochs per configuration and repeated with three random seeds on a Google Colab T4 GPU. Per-channel normalization statistics were computed exclusively from the training subset to avoid information leakage.
+
+The train/validation/test design targeted an approximately 70/15/15 division, with group-based splitting assigning complete geographic tiles to each subset. Consequently, the same geographic tile did not occur in both training and held-out subsets, although sample counts varied across seeds. Each seed changed both the model initialization and the geographic partition; the results therefore combine these two sources of variability.
+
+\subsection{Evaluation Protocol and Decision Criteria}
+\label{subsec:prototype-evaluation}
+
+For each run, the epoch with the highest validation average precision (AP) was retained, and the binary decision threshold was selected to maximize the F1 score on validation data. The final model was then assessed on the held-out geographic test set using precision, recall, F1, false-positive rate (FPR), AP, and area under the receiver operating characteristic curve (AUROC). Model comparisons used paired differences between the optical and fusion configurations for each seed.
+
+To approximate obscured optical observations, a second evaluation covered a randomly positioned rectangular region in the optical channels of half of the test patches. The occluded pixels were set to the normalized channel mean, while SAR channels were left unchanged. The same occlusion mask was applied to both model configurations. This procedure tests robustness to \emph{synthetic} obstruction; it is not equivalent to evaluation under independently observed cloud patterns.
+
+The predefined criteria for adopting fusion were recall of at least 0.75, precision of at least 0.70, and FPR no greater than 0.20, together with an improvement in mean AP that was positive in at least two of the three paired runs. On clean imagery, fusion yielded an AP of 0.778, versus 0.776 for the optical baseline. Fusion recall was 0.636, below the 0.75 target, while precision was 0.770 and FPR was 0.031. Under synthetic occlusion, AP was 0.661 for fusion and 0.639 for the baseline, a mean difference of $+0.022$. Thus, \textbf{the pilot did not meet its adoption criteria}. The more complete numerical comparison and its interpretation are presented in Section~7.
+
+\subsection{Alert API and Notebook Demonstration}
+\label{subsec:prototype-api}
+
+The prototype includes a lightweight FastAPI application (\texttt{04\_api.py}) intended to expose the trained classifier through two HTTP GET endpoints:
+
+\begin{itemize}
+    \item \texttt{/health}: returns the service status, selected model configuration, and supported evaluation years.
+    \item \texttt{/predict}: accepts \texttt{lat}, \texttt{lon}, and \texttt{year} (2022 or 2023), validates the coordinates against the pilot region, retrieves the previous-year and evaluation-year patches from Earth Engine, normalizes the resulting tensor using the saved checkpoint statistics, and returns a JSON response containing location, compared years, model identifier, forest-loss probability, decision threshold, and binary alert flag.
+\end{itemize}
+
+The root path (\texttt{/}) serves a small web page with a map of the pilot area: the user clicks a point inside the pilot box, chooses 2022 or 2023, and receives the forest-loss probability, the decision threshold, and the alert flag, together with a notice that an alert indicates possible forest loss, not illegality, and requires human verification. Two preloaded examples, one with loss (2022) and one without (2023), are provided.
+
+The service keeps the trained fusion model in memory and does not use a database, message queue, or persistent alert store. The \texttt{alert} field is a thresholded model output, not a confirmed incident. The Docker container was built from the repository Dockerfile using Cloud Build and deployed to Google Cloud Run (project \texttt{centinel-tdse}, service \texttt{centinel-api}, region \texttt{us-central1}), with 1~vCPU, 2~GiB RAM, a 300-second request timeout, and port 7860. The image uses Python 3.11 slim and CPU-only PyTorch; the loaded \texttt{fusion} model is a 12-channel ResNet-18 with decision threshold 0.7167.
+
+Hugging Face Spaces was initially considered, but Docker Spaces required a paid plan; Google Cloud Run was selected instead, consistently with the cost model in Section~\ref{sec:business}. The dedicated service account has only Earth Engine Resource Viewer and Service Usage Consumer roles. Its JSON key is stored in Google Secret Manager and injected through the \texttt{EE\_SERVICE\_ACCOUNT\_JSON} environment variable, rather than embedded in source code or the image. The demonstration endpoint permits unauthenticated public requests. Because each prediction retrieves imagery from Earth Engine, no claim is made about measured latency, throughput, availability, concurrency, or scaling.
+
+A companion Colab notebook, \texttt{demo\_centinel\_colab.ipynb}, defines a reproducible demonstration sequence: inspect the tile-export plan; display patch counts and class labels; review stored training logs and comparative metrics; read the pass/fail criteria from \texttt{results.json}; start the API; request \texttt{/health}; query \texttt{/predict} for a labeled positive and a labeled negative patch; and finally request predictions for a balanced demonstration sample of 20 positive and 20 negative test patches. The last step is designed to display a confusion matrix and basic detection counts for the live API interface, rather than to replace the full held-out evaluation.
+
+\textbf{Deployment verification (17 November 2026).} The deployed \texttt{GET /health} endpoint returned \texttt{status=ok}, \texttt{model=fusion}, and supported years 2022 and 2023. A smoke test at latitude 1.3, longitude $-74.75$ (2023) returned probability 0.0185, below the 0.7167 threshold, with no alert. Two reference requests previously used in Colab were then repeated against Cloud Run: the positive location (1.2253, $-74.3909$, 2022) returned 0.9993 and an alert; the negative location (0.8604, $-75.3104$, 2023) returned 0.0338 and no alert. These probabilities matched Colab. The two reference checks and one smoke test demonstrate deployment reproducibility for these cases only; they do not constitute a model evaluation. The notebook's larger demonstration sequence is not claimed as executed in the cloud. No systematic latency, load, concurrency, or scaling measurements were made.
+
+Figure~\ref{fig:frontend} shows the demonstration web interface served at the root path of the deployed service. The dashed rectangle marks the pilot area (Caquet\'a and Putumayo); outside it the model was not trained and the API does not respond. The interface includes two preloaded examples and a notice that the probability is a model output, not the share of forest lost, and that an alert indicates forest loss, not illegality.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\linewidth]{Centinel_frontend.png}
+\caption{Demonstration web interface of the deployed service (Google Cloud Run). It is a deployment check, not a model evaluation.}
+\label{fig:frontend}
+\end{figure}
+
+
+\subsection{Implementation Evidence and Reproducibility}
+\label{subsec:prototype-reproducibility}
+
+The implementation is organized into four stages: \texttt{01\_export\_tiles.py} creates the Earth Engine exports; \texttt{02\_build\_dataset.py} assembles the labeled temporal patches; \texttt{03\_train\_eval.py} trains and compares both networks; and \texttt{04\_api.py} defines the alert interface. Shared configuration and image-access utilities are provided by \texttt{config.py} and \texttt{gee\_utils.py}, while \texttt{models.py} defines the ResNet-18 adaptation. The \texttt{make\_synthetic.py} utility is intended for software smoke tests only; synthetic samples are not the basis for the reported detection metrics.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Execution evidence supported by the submitted material.}
+\label{tab:prototype-verification}
+\begin{tabular}{|p{0.28\linewidth}|p{0.60\linewidth}|}
+\hline
+\textbf{Component} & \textbf{Documented verification status} \\ \hline
+Image export & Completed in Earth Engine: 72 Sentinel composites and 24 Hansen/GLAD label exports. \\ \hline
+Dataset generation & Executed on satellite-derived data: 11,764 patches, including 2,461 positives. \\ \hline
+Training and evaluation & Executed on a Colab T4 GPU: two model configurations across three seeds; metrics reported in the README and paper. \\ \hline
+API implementation & FastAPI endpoints \texttt{/health} and \texttt{/predict} exercised over HTTP against the deployed service, including live Earth Engine retrieval. \\ \hline
+Cloud deployment & Google Cloud Run (\texttt{us-central1}); Cloud Build from Dockerfile; 1~vCPU, 2~GiB; dedicated service account with two roles and credentials in Secret Manager. Verified 17 November 2026: \texttt{/health} OK; reference positive 0.9993 (alert), negative 0.0338 (no alert), matching Colab. Demonstration URL: \url{https://centinel-api-201209038013.us-central1.run.app}. Service to be deleted after evaluation because the Earth Engine quota is shared. No load or scaling test. \\ \hline
+\end{tabular}
+\end{table}
+
+The associated scripts and setup instructions are documented in the project repository, \texttt{github.com/A1Daniel1/Centinel}. Numerical results are described as being recorded in \texttt{results/summary.csv} and \texttt{results/results.json}; the submitted README and paper report the key measurements. The checkpoint files are regenerated by the training script and are not included in the repository due to their size. Reproduction requires Earth Engine access and the original exported imagery or repeating the export process.
+
+\subsection{Limitations and Implications for the Full Architecture}
+\label{subsec:prototype-limitations}
+
+The prototype supports a limited conclusion about annual forest-loss detection, not about illegal activity. In particular, Hansen/GLAD labels do not identify causes or legal responsibility; yearly composites cannot resolve changes within a year; and artificial rectangular occlusion is only a proxy for tropical cloud conditions. Moreover, the 50\% negative-patch subsampling changed the observed class prevalence, which affects the interpretation of precision; the three random seeds and varying geographic test partitions do not support a statistical-significance claim or extrapolation to the national territory.
+
+The relatively high AUROC reported in Section~7 and the more modest recall suggest that a different threshold may yield a different sensitivity--precision trade-off, but this was not evaluated in the pilot. Equally, the lack of a material clean-image advantage for SAR does not establish that radar is unhelpful in other regions or for shorter temporal windows. The most defensible next step is to validate the original joint-versus-independent hypothesis using suitable official reference data and optical imagery, while retaining SAR as an optional extension. Live Earth Engine requests were successfully exercised through the Cloud Run API on two reference cases and one smoke test. A functioning institutional alert service would still require repeatable operational measurements, access controls, rate limiting, monitoring, and the remaining architecture components.
 
 
 % =============================================================
@@ -473,39 +885,546 @@ deployment.
 \section{Results}
 \label{sec:results}
 
-\subsection{Qualitative Results}
-% TODO: Qualitative evaluation of system behavior, alert quality, edge cases observed.
+\subsection{Dataset and Setup}
+
+The exported area (24 tiles of $0.25^\circ$, 2021--2023) yielded 11{,}764
+bitemporal patches of $64\times64$ pixels, of which 2{,}461 (20.9\%) are
+positive.
+Each configuration was trained for 15 epochs with each of three seeds on a
+single GPU.
+Test sets contained between 1{,}824 and 1{,}938 patches (148 to 399 positives,
+depending on the seed's geographic split).
+All figures below come from the pilot's \texttt{results.json}; thresholds were
+fixed on the validation split.
 
 \subsection{Quantitative Results}
-% TODO: Report precision, recall, F1, and false positive rate for each phenomenon,
-% comparing joint vs. independent classifiers. Include a confusion matrix or
-% per-class breakdown.
+
+Table~\ref{tab:results} reports the mean and standard deviation across seeds.
+On clean test imagery the two configurations are practically indistinguishable:
+average precision is 0.778 for optical plus SAR and 0.776 for optical only,
+and F1 is 0.688 and 0.683, respectively.
+The per-seed paired difference in average precision is
+$+0.003$, $-0.015$, and $+0.017$ (Table~\ref{tab:paired}); its mean
+($+0.0016$) is far smaller than the between-seed standard deviation
+(0.057--0.067).
+Both models rank patches well (AUROC 0.93) at a low false positive rate
+(about 0.03).
+
+\begin{table}[ht]
+\centering
+\caption{Test-set metrics, mean $\pm$ standard deviation over three seeds.
+``Occluded'' applies synthetic cloud occlusion to the optical channels of half
+of the test patches.}
+\label{tab:results}
+\small
+\begin{tabular}{llcc}
+\toprule
+Condition & Metric & Optical only & Optical + SAR \\
+\midrule
+Clean    & Precision & $0.756 \pm 0.094$ & $0.770 \pm 0.129$ \\
+         & Recall    & $0.625 \pm 0.022$ & $0.636 \pm 0.044$ \\
+         & F1        & $0.683 \pm 0.053$ & $0.688 \pm 0.044$ \\
+         & FPR       & $0.030 \pm 0.007$ & $0.031 \pm 0.016$ \\
+         & AP        & $0.776 \pm 0.067$ & $0.778 \pm 0.057$ \\
+         & AUROC     & $0.931 \pm 0.008$ & $0.931 \pm 0.011$ \\
+\midrule
+Occluded & Precision & $0.769 \pm 0.097$ & $0.785 \pm 0.111$ \\
+         & Recall    & $0.429 \pm 0.063$ & $0.454 \pm 0.068$ \\
+         & F1        & $0.550 \pm 0.073$ & $0.567 \pm 0.053$ \\
+         & FPR       & $0.019 \pm 0.005$ & $0.021 \pm 0.011$ \\
+         & AP        & $0.639 \pm 0.103$ & $0.661 \pm 0.093$ \\
+         & AUROC     & $0.846 \pm 0.026$ & $0.860 \pm 0.034$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Paired per-seed difference (optical + SAR minus optical only).}
+\label{tab:paired}
+\small
+\begin{tabular}{lccc}
+\toprule
+ & Seed 0 & Seed 1 & Seed 2 \\
+\midrule
+$\Delta$AP, clean    & $+0.003$ & $-0.015$ & $+0.017$ \\
+$\Delta$F1, clean    & $-0.020$ & $+0.017$ & $+0.019$ \\
+$\Delta$AP, occluded & $+0.022$ & $+0.009$ & $+0.036$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Under synthetic occlusion, both models degrade: average precision falls from
+0.776 to 0.639 (optical only) and from 0.778 to 0.661 (optical plus SAR), and
+recall drops to 0.43 and 0.45.
+The fusion model is ahead in all three seeds ($\Delta$AP of $+0.022$ on
+average), a consistent but small advantage that is of the same order as the
+between-seed variation.
+
+\subsection{Evaluation Against the Decision Criteria}
+
+Against the criteria of Section~\ref{sec:gap}, the optical-plus-SAR
+configuration meets the precision requirement (0.770 $\geq$ 0.70) and the false
+positive rate requirement (0.031 $\leq$ 0.20), but \textbf{not} the recall
+requirement (0.636 $<$ 0.75).
+The criterion that fusion improve average precision is satisfied only in the
+formal sense (positive mean and positive in two of three seeds); the margin is
+negligible and cannot be distinguished from seed-to-seed variation.
+Fusion is also more robust to occlusion in all three seeds, with a small effect.
+The pilot therefore \emph{does not meet} its go criteria: the evidence supports
+neither adopting nor discarding SAR fusion, and the limiting factor on this
+dataset is recall rather than the choice of input.
+
+\subsection{Implications for the Original Hypothesis}
+
+Because the adjusted question was not answered in favor of fusion, the
+pilot gives no basis for making SAR ingestion a requirement of the first
+validation of the joint-detection hypothesis.
+Radar adds data volume, co-registration effort, and processing cost, and on
+annual composites it produced no meaningful gain on clean imagery and only a
+small gain under occlusion.
+The pilot also does not weaken the original hypothesis, since it did not
+test it.
+Since radar adds cost and no benefit was demonstrated, we decide, as a matter
+of cost under uncertainty and not as a result of the pilot, to test joint
+versus independent detection with optical imagery only, keeping SAR as an
+optional module to be revisited if cloud cover proves limiting at larger scale
+or with denser time series.
+The pilot does not show that radar is useless: it shows that, on annual
+composites and this dataset, its benefit could not be demonstrated.
+
+\subsection{Interpretation and Limits}
+
+Three observations bound the interpretation.
+First, the annual cloud-masked median composites already remove most cloud
+effects before the model sees the data, which may leave little for radar to
+add on clean imagery; this is a hypothesis, not something the pilot tested.
+Earlier work on optical--SAR fusion in the Brazilian Amazon reports gains from
+fusion~\cite{ferrari2023}; it fuses bitemporal image pairs, whereas the pilot
+used annual median composites, and whether that difference explains the
+contrast was not tested.
+Second, the high AUROC alongside moderate recall indicates that the model ranks
+patches well but that the operating point selected for F1 on the validation
+split trades recall for precision; a threshold tuned for recall, or the
+label noise inherent to a global 30\,m forest-loss product, could shift this,
+but neither was explored.
+Third, with three seeds, geographic splits that change with the seed, and no
+significance test, none of the differences above should be read as established.
+The pilot evaluates the detection model separately from the deployment check. The API was deployed on Google Cloud Run and two reference queries reproduced the Colab probabilities (0.9993 with alert and 0.0338 without alert); a third request served as a smoke test of the Earth Engine connection. This is not a new evaluation of the model. Latency, throughput, concurrency, load, and scaling were not systematically measured.
 
 
 % =============================================================
 % CONCLUSIONS AND FUTURE WORK
 % =============================================================
+\section{Business Case, Governance and Responsibility}
+\label{sec:business}
+
+This section addresses the aspects of the proposal that the pilot does not
+evaluate empirically: what the system would cost, how its value would be
+measured, how it would be governed and secured, and what responsibilities it
+raises, and it ends with a phased roadmap. Each figure is labeled as
+\emph{measured} in the pilot, \emph{derived} by arithmetic from a measurement, or
+an \emph{assumption}. Prices were read from the providers' public pages in
+November 2026 and change over time.
+
+\subsection{Cost Model and Value Metrics}
+\label{sec:costs}
+
+Satellite data from Copernicus and USGS/NASA is free of charge, so the cost of
+the platform is driven by processing, storage, human labeling, and the team
+that operates it. We model the annual cost as
+\begin{equation}
+C = C_{\text{fixed}} + c_{\text{proc}}\,A\,f + c_{\text{stor}}\,V + c_{\text{lab}}\,N_{\text{lab}},
+\end{equation}
+where $A$ is the monitored area, $f$ the revisit frequency, $V$ the stored
+volume, and $N_{\text{lab}}$ the number of labeled samples per year.
+Table~\ref{tab:costs} lists the drivers, how each scales, and what we know about
+it.
+
+\begin{table}[H]
+\centering
+\caption{Cost drivers of the platform (parametric model; the Earth Engine row and
+the other priced items are detailed in Section~\ref{sec:cost-estimate}).}
+\label{tab:costs}
+\begin{tabularx}{\linewidth}{l l X}
+\toprule
+\textbf{Driver} & \textbf{Scales with} & \textbf{Comment} \\
+\midrule
+Imagery acquisition & -- & Source imagery is free (Copernicus, USGS/NASA); processing through Earth Engine may carry a license cost. \\
+Processing (tiling, inference) & $A \cdot f$ & Stateless containers; cost grows linearly with area and revisit, and can be reduced by restricting inference to cloud-free tiles. \\
+Storage (scenes, tiles, detections) & $V$ & Dominated by raw scenes; mitigated by keeping only derived tiles after a retention period. \\
+Labeling and field verification & $N_{\text{lab}}$ & Expected to be the main recurring cost, since expert labels are scarce and were the limiting factor in this work. \\
+Platform operation & fixed & Gateway, identity provider, monitoring, and a small operations team. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Cost Estimate}
+\label{sec:cost-estimate}
+
+\paragraph{Earth Engine.}
+The pilot measured about 352 Earth Engine compute-seconds (EECU-s) to export one
+annual six-band composite of one $0.25^\circ$ tile (roughly 770\,km$^2$).
+Colombia's continental territory is about 1.14 million\,km$^2$, or about 1{,}500
+such tiles, so a national pass costs about $1{,}500\times352 \approx 528{,}000$
+EECU-s, or \textbf{about 147 EECU-hours} (derived from a single measurement).
+Table~\ref{tab:ee} translates this into yearly volumes and cost under the two
+licensing situations, using the public pricing~\cite{ee_pricing} and
+noncommercial quotas~\cite{ee_noncommercial}. The calculation assumes the cost
+per composite does not fall with shorter time windows; shorter windows use fewer
+images, so this is likely conservative, but it was not tested.
+
+\begin{table}[H]
+\centering
+\caption{Earth Engine volume and cost by processing cadence for national
+coverage (derived; one national pass $\approx$ 147 EECU-hours).}
+\label{tab:ee}
+\small
+\begin{tabular}{lrp{4.1cm}p{4.3cm}}
+\toprule
+Cadence & EECU-h/year & Noncommercial (Community tier, 150 EECU-h/month) & Commercial (Basic plan, \$500/month incl.\ 100 batch EECU-h/month) \\
+\midrule
+Annual    & 147   & Fits (one pass)                  & about \$6{,}000/year (within included hours) \\
+Quarterly & 588   & Fits (147 per quarter)           & about \$6{,}000/year (within included hours) \\
+Monthly   & 1{,}764 & About 147 per month: barely fits the 150 limit & about \$6{,}226/year (\$6{,}000 plus 564 extra EECU-h at \$0.40) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Whether an operational service run by or for a government agency qualifies as
+noncommercial is not stated in the quota documentation we consulted, and we do
+not assume that it does. Under a commercial license the monthly platform fee
+dominates; usage is a small share.
+
+\paragraph{Other items.}
+Table~\ref{tab:cost} lists the remaining items.
+
+\begin{table}[H]
+\centering
+\caption{Other cost items. ``Not estimated'' means we did not obtain a
+defensible figure.}
+\label{tab:cost}
+\small
+\begin{tabular}{p{2.6cm}p{5.4cm}p{3.7cm}p{1.9cm}}
+\toprule
+Item & Basis & Estimate & Status \\
+\midrule
+Model training (GPU) &
+Pilot: six runs took under ten minutes on one T4. National data would be about
+62$\times$ larger (1{,}500 vs.\ 24 tiles), assuming linear scaling. One
+g4dn.xlarge costs \$0.526/hour on demand and about \$0.21--0.24 as spot~\cite{g4dn_price} &
+Up to about 10 hours, or about \$5.50 on demand, per equivalent set of six runs;
+about \$110 for 20 such sets & Assumption \\
+Composite storage &
+6 bands $\times$ 4 bytes at 20\,m is about 60\,KB/km$^2$, or about 68\,GB per national
+annual composite (uncompressed). Earth Engine storage list price is about
+\$0.026/GB-month, used as a proxy for object storage &
+About \$1.80/month per year of data retained & Derived \\
+Alert API serving &
+Assumed 8\,s of one vCPU and 0.5\,GiB per request; Cloud Run list prices of
+\$0.000024/vCPU-s and \$0.0000025/GiB-s~\cite{cloudrun_pricing} &
+About \$0.0002 per request; roughly 22{,}000 requests/month fall in the free tier &
+Assumption (latency not measured) \\
+Database, orchestrator, observability, security tooling &
+Not priced. Managed options vary widely in cost &
+Not estimated & --- \\
+Staff, operations, legal review &
+Not priced; likely the largest item &
+Not estimated & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Reading of the numbers.}
+Compute and storage for a national annual pass are small. The decisions that
+move the budget are the Earth Engine license status, the managed services and
+staff we did not price, and whether the cadence needs to go below annual.
+
+Because the pilot was scoped to deforestation and the architecture is cloud
+native and stateless, the pilot cost is small and bounded, whereas the national
+cost depends mainly on the license status, on $N_{\text{lab}}$ and on the operations team. We do not
+estimate savings: the value of early detection depends on interventions that the
+platform does not control.
+Instead, we propose operational metrics that the institution can measure from
+the first deployment:
+\begin{itemize}
+    \item \textbf{Detection-to-alert latency}: time from scene availability to an alert in the Alert API.
+    \item \textbf{Verified-alert precision}: share of alerts that field verification confirms, recorded through the field application.
+    \item \textbf{Recall against an independent reference}, for example official deforestation maps, at a fixed area.
+    \item \textbf{Hectares monitored per verification-officer-day}, as a measure of how much the system reduces manual review.
+    \item \textbf{Cost per verified alert}, combining processing, labeling and verification effort.
+\end{itemize}
+These metrics tie the technical evaluation of Section~\ref{sec:results} to the
+decision an institution would face, namely whether the cost per verified alert
+is acceptable.
+
+\subsection{Governance and Security}
+\label{sec:governance}
+
+\textbf{Security status of the deployed demonstration.} The Cloud Run service is publicly accessible without authentication (\texttt{--allow-unauthenticated}). Its dedicated service account is limited to Earth Engine Resource Viewer and Service Usage Consumer; the service-account JSON key is held in Secret Manager and injected as \texttt{EE\_SERVICE\_ACCOUNT\_JSON}. Authentication, rate limiting, and application-level monitoring/observability remain proposed controls, not implemented features. The public service is intended only for the demonstration and will be deleted after evaluation because the Earth Engine quota is shared.
+
+
+\textbf{Governance as error correction.}
+Following the view that institutions should be designed so that mistaken
+decisions can be detected and replaced~\cite{popper1945}, we treat the
+architecture and the detection model as revisable proposals, within the decision
+rights and accountability that an IT governance framework
+requires~\cite{weill2004}. The policy for Centinel specifies the following.
+\begin{itemize}
+    \item \textbf{Hypothesis and refuting evidence.} The hypothesis is that one joint multi-label model detects the three phenomena better than three independent detectors. Evidence against it would be a joint model that does not match independent detectors in recall at equal precision on the same labeled region.
+    \item \textbf{Evaluation as organized criticism.} The decision criteria of Section~\ref{sec:pilot-criteria} were fixed before the experiment, and the pilot's result, that the criteria were not met, is reported as such. The scope was then revised instead of defending the original plan: since label layers for mining and coca could not be obtained, the pilot was reduced to deforestation. We regard this as the process working as intended.
+    \item \textbf{Authority and prohibited actions.} The system may generate and rank alerts; it may not trigger operations, sanctions or communications to third parties, and no alert is treated as proof of illegality.
+    \item \textbf{Roles.} A \emph{data owner} (an environmental authority) decides which layers may be used for training; a \emph{model owner} approves each model version before the registry promotes it; a \emph{verification lead} accepts or rejects field confirmations. In a real deployment, an \emph{independent reviewer} outside the team that builds the model, for example an environmental authority or a technical committee, would examine disputed decisions; this role was not applied in the pilot.
+    \item \textbf{Stop conditions, appeal and revision.} The model owner or the reviewer suspends the system if verified-alert precision, measured over the last $N$ field verifications, falls below a threshold $P$, or if the reference data prove unreliable. The threshold $P$ and the window $N$ are set with the data owner after an initial field-verification phase; before that, no value can be justified from pilot data. Contested alerts feed the evaluation set. The policy has an owner and a scheduled review date, and each revision records its reasons.
+\end{itemize}
+Retraining is triggered by monitoring but promoted only after the model owner
+reviews the evaluation on a held-out region, so that no model reaches
+production without human approval.
+
+\textbf{Governance and management.} In data-management terms,
+governance sets decision rights and accountability, and management executes
+within them~\cite{dama2017}. In Centinel the data owner and the model owner
+govern, in the sense that they decide which layers and which model versions are
+admissible, whereas the verification lead and the operations team manage, in
+the sense that they run the pipeline and confirm alerts.
+
+\textbf{Quality cycle.} The pilot followed a plan--do--check--act cycle, which
+is the quality cycle that data-quality guidance builds on~\cite{dama2017}:
+\emph{plan}, the decision criteria were fixed before the experiment;
+\emph{do}, the pilot was run on open data; \emph{check}, the results were
+compared with the criteria (recall 0.636 against a target of 0.75); and
+\emph{act}, the scope was reduced and the roles and stop condition above were
+defined. A production deployment would repeat this cycle on a schedule, not only
+once.
+
+\textbf{Governance of reference data.} The main obstacle of this work was not the
+model but access to ground truth: the IDEAM, UNODC-SIMCI and EVOA layers were
+not obtained. A deployable policy therefore needs data-sharing agreements with
+those institutions, a named custodian of the labels, and a rule for how they are
+updated; until then, the platform can only be trained on layers it is allowed to
+use.
+
+\textbf{Data quality.} The quality of the reference labels and of the imagery
+bounds what any model can achieve, so we select the dimensions of the ISO/IEC
+25012 data-quality model~\cite{iso25012} that matter for Centinel and attach an
+indicator and a responsible role to each (Table~\ref{tab:dq}). The indicators
+are proposals for a production phase; the pilot did not measure them.
+
+\begin{table}[H]
+\centering
+\caption{Data-quality dimensions selected for Centinel (proposed indicators).}
+\label{tab:dq}
+\small
+\begin{tabularx}{\linewidth}{l X X l}
+\toprule
+\textbf{Dimension} & \textbf{Where it matters} & \textbf{Indicator} & \textbf{Role} \\
+\midrule
+Accuracy & Forest-loss labels from global products omit small-scale clearing & Agreement with official layers on a held-out region & Data owner \\
+Completeness & Cloud cover leaves pixels without data & Share of valid pixels per tile and period & Model owner \\
+Currentness & Labels are annual, alerts are meant to be earlier & Delay between an event and the availability of its reference label & Data owner \\
+Consistency & Optical and radar inputs must share grid and projection & Share of tiles passing alignment checks & Model owner \\
+Traceability & An alert must be explainable after the fact & Share of alerts linked to a scene, a model version, and a label version & Model owner \\
+Confidentiality & Alert coordinates are sensitive & Denied and logged access attempts to exact coordinates & Data owner \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+As an example of how each indicator would be specified, the stop condition
+of this section uses \emph{verified-alert precision}: its quality attribute is
+accuracy; its variables are the number of alerts confirmed in the field,
+$C$, and the number of alerts verified, $V$, over the last $N$ verifications;
+its formula is $\hat{p} = C/V$; its target is the threshold $P$, set with the
+data owner after an initial verification phase; and a value below $P$ is read as
+a reason to suspend the system, not as proof of a model failure, because the
+reference data may also be at fault.
+
+\textbf{Security design.} Following secure-design
+principles~\cite{saltzer2009}, every request to the Alert API passes through the
+API gateway and the identity provider (complete mediation), access is denied
+unless a role grants it (fail-safe defaults), and alert coordinates are visible
+only to authorized officers. Alert state changes and field confirmations are
+logged for auditing.
+
+\textbf{Proposed production baseline.} The pilot does not implement the
+following controls; they are the baseline we propose for a production phase.
+\begin{itemize}
+    \item \textbf{Authentication and transport:} API keys or OAuth~2 for
+    institutional clients, TLS on every endpoint, and per-client rate limits,
+    which also protect the Earth Engine quota.
+    \item \textbf{Secrets and access:} cloud secret storage for service-account
+    keys, least-privilege roles, and separate credentials per environment.
+    \item \textbf{Operational metrics:} request latency, error rate, Earth
+    Engine quota consumption, and fraction of requests rejected for missing data.
+    \item \textbf{Model monitoring:} alert rate per region and period, input
+    missing-data fraction, and probability distribution drift, as early signs
+    that the model no longer matches the data. Labeled performance can only be
+    re-measured when new reference data arrive.
+    \item \textbf{Audit log:} the log of alert state changes is extended to
+    record who queried what, to support later review of how an alert was
+    produced.
+    \item \textbf{Service objectives:} availability and latency targets should be
+    set with the institutional users; we do not propose figures that the pilot
+    did not measure.
+\end{itemize}
+
+\textbf{Publication policy and legal review.} The institution should define who
+receives exact coordinates, who receives aggregated views, and for how long
+alerts are retained. Alerts inside indigenous territories and protected areas
+may require prior consultation and community agreements, and location data
+linked to identifiable people falls under Colombia's personal-data law (Law 1581
+of 2012). Both points need legal review; we do not assert how they apply.
+
+Table~\ref{tab:risks} summarizes the main risks.
+
+\begin{table}[H]
+\centering
+\caption{Risk matrix (qualitative; likelihood and impact are our judgment, not measured).}
+\label{tab:risks}
+\begin{tabularx}{\linewidth}{X c c X}
+\toprule
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} \\
+\midrule
+Label scarcity prevents training for mining and coca (\emph{occurred}) & High & High & Request IDEAM, UNODC-SIMCI and EVOA layers; start with deforestation only. \\
+Recall below target (\emph{occurred}: 0.64 vs.\ 0.75) & High & High & Improve labels and architecture before any deployment; report recall with every alert statistic. \\
+Labels reflect a definition of forest loss, not illegality & High & High & Human confirmation; treat alerts as leads, not findings; validate against official layers. \\
+Poor generalization to other regions or years & Medium & High & Evaluate on held-out regions before expanding; regional deployment first. \\
+False positives lead to unwarranted field operations & Medium & High & Confidence threshold, human confirmation before any action. \\
+Missed detections under persistent cloud cover & High & Medium & Optional radar module; cloud-aware scheduling. \\
+Model drift as land cover changes & Medium & Medium & Monitoring and approved retraining. \\
+Leak of alert coordinates & Low & High & Proposed role-based access, audit log, encryption at rest and in transit; demo endpoint currently public and unauthenticated. \\
+Dependence on free data providers and licensing (Earth Engine terms, quotas) & Medium & Medium & Multiple sources (Sentinel-2, Landsat); confirm license status before operation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Ethical, Organizational and Philosophical Implications}
+\label{sec:ethics}
+
+\textbf{An alert is not evidence.} The system produces a probabilistic
+statement about pixels, not a finding of illegality: a clearing may be
+authorized, and a mine or a crop may belong to an activity that is lawful or
+under a substitution agreement. Treating a detection as proof would shift
+responsibility from officials to an algorithm. For this reason the architecture
+keeps a human confirmation step, and the explainability required for judicial
+use remains future work.
+
+\textbf{Who bears the cost of errors.} False positives fall on people: rural and
+campesino communities, and Indigenous and Afro-descendant territories, who may
+face operations triggered by a mistaken alert. The pilot's recall of 0.636 shows
+that the model would also miss a large part of real events. Both error types
+should be reported openly to the institutions that use the system.
+
+\textbf{Dual use.} A tool built to protect ecosystems can also support
+surveillance of communities. Access control, purpose limitation, and a policy on
+who may request which alerts are therefore part of the design, not an
+afterthought, in line with the governance function of the NIST AI risk
+management framework~\cite{nistairmf2023}.
+
+\textbf{Bias in the reference data.} Labels derived from global forest-loss
+products encode a definition of forest and a detection method; a model trained on
+them inherits their omissions, for example small-scale clearing under cloud.
+Claims about performance should be tied to the reference used.
+
+\textbf{Organizational implications.} Adopting the platform requires
+inter-institutional agreements on data sharing, clear responsibility among
+environmental authorities, the prosecutor's office and security forces, and
+training for the officers who verify alerts. Without these, a technically sound
+system would produce alerts that no one is accountable for acting on.
+\subsection{Roadmap}
+\label{sec:roadmap}
+
+Timings are indicative planning assumptions, not derived from the pilot.
+
+\begin{table}[H]
+\centering
+\caption{Phased roadmap with decision gates.}
+\label{tab:roadmap}
+\small
+\begin{tabular}{p{1.8cm}p{1.9cm}p{4.2cm}p{4.0cm}}
+\toprule
+Phase & Timing & Objective & Exit gate \\
+\midrule
+0. Pilot & Completed (2026) & Forest-loss pipeline on open data; SAR fusion question & Not met: recall 0.64 vs.\ 0.75; hypothesis untested \\
+1. Test the hypothesis & Months 0--3 after approval & Obtain ground truth; compare joint vs.\ independent detection, optical only & Joint model lowers false alarms in co-occurrence zones, paired across seeds on a fixed geographic split \\
+2. Production MVP & Months 3--9 & Ingestion, registry, alert database, orchestration, security and observability baseline; regional cloud deployment & Service objectives agreed and met in one region \\
+3. Scale and integrate & Months 9--18 & Additional regions or national coverage; integration with institutional systems; governance in operation & Institutional adoption decision \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \section{Conclusions and Future Work}
 \label{sec:conclusions}
 
 \subsection{Contributions}
-% TODO: Summarize what the pilot demonstrated and what design decisions it validated.
+
+This paper proposed Centinel, a cloud reference architecture for the early
+detection of illegal territorial activities from satellite imagery in Colombia,
+organized around one central hypothesis: that jointly detecting deforestation,
+illegal mining, and coca cultivation lowers false alarms relative to three
+independent detectors.
+The ground truth needed to test it (IDEAM, UNODC/SIMCI, EVOA) could not be
+obtained within the project timeline, so the question and the minimum viable
+product were adjusted to open data.
+The resulting pilot tested whether adding Sentinel-1 radar to Sentinel-2 imagery
+improves annual forest-loss detection and robustness to cloud occlusion.
+On 11{,}764 patches over a $1.5^\circ\times1^\circ$ area of Caquetá and
+Putumayo, radar fusion gave no meaningful gain on clean imagery, a small
+consistent gain under synthetic occlusion, and recall of 0.64 against a target
+of 0.75.
+The adjusted question was therefore not answered in favor of fusion.
+This does not close the project: the original hypothesis is still viable and
+untested, and, since radar showed no
+demonstrated benefit, we propose to test it first with optical imagery only.
+The pilot also delivers a working, reproducible pipeline from imagery to
+detection that the next validation can reuse.
 
 \subsection{Final Context}
-% TODO: Situate the results within the broader Colombian and Latin American monitoring
-% landscape. Discuss implications for SMBYC, UNODC/SIMCI, or similar agencies.
+
+The results concern forest-loss detection measured against a global
+tree-cover-loss product; they do not show that illegal activity can be
+detected or attributed.
+Any institutional use, for example by environmental authorities, would require
+validation against official deforestation data and an assessment of cause and
+legality, which are outside the scope of this pilot.
 
 \subsection{Future Work}
-% TODO: Outline the path from the proof-of-concept pilot to full-scale deployment.
-% Include: expansion from pilot region to national coverage, integration with
-% institutional APIs (SMBYC, UNODC/SIMCI), real-time ingestion pipeline,
-% explainability requirements for judicial evidence use, governance and data
-% ownership considerations for indigenous territories.
+
+The priority is the original premise, tested with the pipeline built for the
+pilot but without radar:
+
+\begin{itemize}
+    \item \textbf{Test joint versus independent detection (priority).}
+    Obtain spatial ground truth from IDEAM (deforestation), UNODC/SIMCI (coca
+    cultivation), and the competent mining authority (alluvial mining), and
+    compare a shared multi-label model with three independent detectors on
+    Sentinel-2 imagery only, in a region where the phenomena co-occur.
+    Planned metrics are those of the pilot (precision, recall, F1, false
+    positive rate, average precision), with false alarm rate in co-occurrence
+    zones as the primary outcome, repeated over seeds and with a fixed
+    geographic split to allow a paired significance test.
+    \item \textbf{Keep SAR optional.} Revisit radar if cloud cover limits
+    optical detection at larger scale or with intra-annual time series.
+    \item \textbf{Close the recall gap:} tune the decision threshold for
+    recall, evaluate pretrained and transformer-based backbones, and test
+    higher-resolution or denser temporal inputs.
+    \item \textbf{Official labels:} replace Hansen / GLAD labels with the
+    official IDEAM deforestation product.
+    \item \textbf{Harden the deployed demonstration:} replace public unauthenticated access with authentication and rate limiting, add application observability, and test latency, load, concurrency and regional reliability before operational use.
+    \item \textbf{Toward full deployment:} intra-annual time series for
+    near-real-time alerts, the remaining containers of the architecture,
+    explainability suitable for judicial evidence, and governance and data
+    ownership arrangements for indigenous territories.
+\end{itemize}
 
 
 % =============================================================
 % BIBLIOGRAPHY
 % =============================================================
+\section*{Declaration on the Use of Artificial Intelligence}
+The authors used artificial intelligence tools, specifically ChatGPT and Claude, as support for writing and reviewing this document. The texts were first drafted from the authors' own ideas and judgment; the tools were then used to identify aspects to improve, mainly grammar correction, clarity, organization and the way ideas are expressed, and to help verify references and update public figures. The suggestions were not incorporated automatically: the authors reviewed each one, checked figures and sources against the original documents, and accepted or rejected the changes according to their own criteria.
+
+The technical development of the work, including the architecture design, the pipeline implementation, the experiments, the results, the analysis and the methodological decisions, was carried out by the authors.
+
 \begin{thebibliography}{99}
 
 \bibitem{ideam_smbyc}
@@ -517,20 +1436,34 @@ Bosques y Carbono (SMByC), 2016.
 El Tiempo. \textit{La deforestación en Colombia aumentó 5,2\% en 2025}. 2025.
 \url{https://www.eltiempo.com/vida/medio-ambiente/la-deforestacion-en-colombia-aumento-5-2-en-2025-pero-el-gobierno-celebra-cque-cifras-estan-por-debajo-de-lo-pactado-en-el-plan-de-desarrollo-3575461}
 
+\bibitem{simci2024}
+Forbes Colombia. \textit{Cultivos de coca llegaron a 261.000 hect\'areas en 2024
+tras aumentar 3,5\%}. June 25, 2026 (report \textit{Monitoreo de territorios con
+presencia de cultivos de coca 2024}, UNODC and Ministerio de Justicia).
+\url{https://forbes.co/2026/06/25/actualidad/cultivos-de-coca-llegaron-a-261-000-hectareas-en-2024-tras-aumentar-35/}
+
+\bibitem{siima2025}
+ColombiaCheck. \textit{Honorio Henr\'iquez habla de 330.000 hect\'areas de coca
+cultivadas en Colombia, pero cifras oficiales son menores}. 2026 (reports SIIMA,
+Polic\'ia Nacional, and El Tiempo, Jan.\ 2026: 262,179\,ha, cut-off August 2025).
+\url{https://colombiacheck.com/chequeos/honorio-henriquez-habla-de-330000-hectareas-de-coca-cultivadas-en-colombia-pero-cifras}
+
+\bibitem{minenergia_evoa2025}
+Ministerio de Minas y Energ\'ia y UNODC. \textit{Colombia registr\'o 118.410
+hect\'areas con explotaci\'on de oro de aluvi\'on en 2025}. Informe EVOA 2025,
+October 2, 2026.
+\url{https://minenergia.gov.co/es/sala-de-prensa/noticias-index/colombia-registro-118410-hectareas-con-explotacion-de-oro-de-aluvion-en-2025-segun-el-informe-anual-del-gobierno-nacional-y-unodc/}
+
 \bibitem{minjusticia_coca2023}
 Ministerio de Justicia y del Derecho. \textit{Resultados del monitoreo a
 cultivos de coca hecho en 2023}. UNODC/SIMCI, 2023.
 \url{https://www.minjusticia.gov.co/Sala-de-prensa/Paginas/Resultados-monitoreo-cultivos-2023-no-son-ajenos-a-presion-global-por-aumento-de-demanda.aspx}
 
-\bibitem{infobae_evoa2023}
-Infobae. \textit{Aumentó la minería ilegal en Colombia: el 73\% de la
-explotación de oro de aluvión es ilícita}. UNODC, 2023.
-\url{https://www.infobae.com/colombia/2023/11/22/aumento-la-mineria-ilegal-en-colombia-el-73-de-la-explotacion-de-oro-de-alivion-es-ilicita/}
-
-\bibitem{gfw_glad}
-Global Forest Watch. \textit{GLAD Deforestation Alerts}. World Resources
-Institute / University of Maryland, 2016.
-\url{https://www.globalforestwatch.org/}
+\bibitem{hansen2013}
+M.~C. Hansen, P.~V. Potapov, R.~Moore, M.~Hancher, S.~A. Turubanova,
+A.~Tyukavina, et al. \textit{High-Resolution Global Maps of 21st-Century Forest
+Cover Change}. Science, 342(6160):850--853, 2013.
+\url{https://doi.org/10.1126/science.1244693}
 
 \bibitem{mongabay_siona2023}
 Mongabay Latam. \textit{Deforestación, minería ilegal y narcotráfico acorralan
@@ -555,11 +1488,6 @@ Universidad del Rosario. \textit{CoMiMo: Detección de minería ilegal mediante
 imágenes satelitales}. Based on Saavedra-Romero (2017), 2017.
 \url{https://pure.urosario.edu.co/es/projects/miner\%C3\%ADa-ilegal/}
 
-\bibitem{comimo_infobae2021}
-Infobae. \textit{Desarrollan aplicación para detectar minas ilegales en
-Colombia}. 2021.
-\url{https://www.infobae.com/america/colombia/2021/09/30/desarrollan-aplicacion-para-detectar-minas-ilegales-en-colombia/}
-
 \bibitem{smbyc_atd_github}
 SMByC. \textit{ATD: Alertas Tempranas de Deforestación}. Source code repository,
 IDEAM, 2016.
@@ -570,10 +1498,80 @@ Fuerza Aérea Colombiana. \textit{FACSAT-1: Detección de patrones de minería
 ilegal a cielo abierto utilizando redes neuronales}. 2023.
 \url{https://poderespacial.fac.mil.co/es/facsat/deteccion-de-patrones-de-mineria-ilegal-cielo-abierto-utilizando-redes-neuronales}
 
-\bibitem{elespectador_deforestacion2025}
-El Espectador. \textit{Deforestación en Colombia alcanzó 72.409 hectáreas en
-2025, 6\% más que en 2024}. 2025.
-\url{https://www.elespectador.com/ambiente/amazonas/deforestacion-en-colombia-alcanzo-72409-hectareas-en-2025-6-mas-que-en-2024/}
+\bibitem{unodc_evoa2022}
+UNODC. \textit{Explotaci\'on de oro de aluvi\'on: evidencias a partir de
+percepci\'on remota 2022} (resumen ejecutivo). Oficina de las Naciones Unidas
+contra la Droga y el Delito, Colombia, 2023.
+\url{https://www.unodc.org/documents/colombia/2023/noviembre-11/Resumen_Ejecutivo_EVOA_2022.pdf}
+
+\bibitem{reiche2021radd}
+J.~Reiche, A.~Mullissa, B.~Slagter, et al. \textit{Forest disturbance alerts
+for the Congo Basin using Sentinel-1}. Environmental Research Letters,
+024005, 2021.
+\url{https://doi.org/10.1088/1748-9326/abd0a8}
+
+\bibitem{gfw_radd}
+Global Forest Watch. \textit{New Radar Alerts Monitor Forests Through the
+Clouds}. World Resources Institute, 2021.
+\url{https://www.globalforestwatch.org/blog/data/radd-radar-alerts}
+
+\bibitem{gfw_integrated}
+Global Forest Watch. \textit{Looking for the Quickest Signal of Deforestation
+or Vegetation Disturbance Globally? Turn to GFW's Integrated Disturbance
+Alerts}. 2026.
+\url{https://www.globalforestwatch.org/blog/data/integrated-deforestation-alerts}
+
+\bibitem{ferrari2023}
+F.~Ferrari, M.~P. Ferreira, and R.~Q. Feitosa. \textit{Fusing Sentinel-1 and
+Sentinel-2 images with transformer-based network for deforestation detection
+in the Brazilian Amazon under diverse cloud conditions}. ISPRS Annals of the
+Photogrammetry, Remote Sensing and Spatial Information Sciences,
+X-1/W1-2023, 2023.
+\url{https://isprs-annals.copernicus.org/articles/X-1-W1-2023/999/2023/}
+
+
+\bibitem{popper1945}
+K. Popper. \textit{The Open Society and Its Enemies}. Routledge, London, 1945.
+
+\bibitem{weill2004}
+P. Weill and J. Ross. \textit{IT Governance: How Top Performers Manage IT
+Decision Rights for Superior Results}. Harvard Business School Press, 2004.
+
+\bibitem{saltzer2009}
+J. H. Saltzer and M. F. Kaashoek. \textit{Principles of Computer System Design:
+An Introduction}. Morgan Kaufmann, 2009.
+
+\bibitem{nistairmf2023}
+National Institute of Standards and Technology. \textit{Artificial Intelligence
+Risk Management Framework (AI RMF 1.0)}. NIST AI 100-1, 2023.
+
+\bibitem{ee_pricing}
+Google Cloud. \textit{Google Earth Engine pricing}. Accessed November 2026.
+\url{https://cloud.google.com/earth-engine/pricing}
+
+\bibitem{ee_noncommercial}
+Google. \textit{Earth Engine noncommercial quota tiers}. Accessed November 2026.
+\url{https://developers.google.com/earth-engine/guides/noncommercial_tiers}
+
+\bibitem{cloudrun_pricing}
+Google Cloud. \textit{Cloud Run pricing}. Accessed November 2026.
+\url{https://cloud.google.com/run/pricing}
+
+\bibitem{g4dn_price}
+DoiT. \textit{AWS EC2 g4dn.xlarge pricing in us-east-1} (third-party price
+aggregator). Accessed November 2026.
+\url{https://www.doit.com/compute/spot/us-east-1/g4dn.xlarge}
+
+\bibitem{minambiente_13}
+Ministerio de Ambiente y Desarrollo Sostenible. \textit{El 13\,\% de la deforestaci\'on anual del pa\'is est\'a vinculada a cultivos de uso il\'icito}. Press release, September 8, 2023.
+\url{https://www.minambiente.gov.co/el-13-de-la-deforestacion-anual-del-pais-esta-vinculada-a-cultivos-de-uso-ilicito/}
+
+\bibitem{dama2017}
+DAMA International. \textit{DAMA-DMBOK: Data Management Body of Knowledge}, 2nd ed.
+Technics Publications, 2017.
+
+\bibitem{iso25012}
+ISO/IEC 25012:2008. \textit{Software engineering --- Software product Quality Requirements and Evaluation (SQuaRE) --- Data quality model}. International Organization for Standardization, 2008.
 
 \end{thebibliography}
 

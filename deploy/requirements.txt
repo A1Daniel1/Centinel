@@ -1,0 +1,4 @@
+numpy
+earthengine-api
+fastapi
+uvicorn

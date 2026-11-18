@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Centinel – Alerta de pérdida de bosque</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #f5f4ef; --panel: #ffffff; --fg: #1d2a24; --muted: #5d6b64; --line: #dcdad0;
+    --accent: #1f6b4a; --accent-fg: #ffffff; --alert: #b3261e; --alert-bg: #fbe9e7;
+    --ok: #1f6b4a; --ok-bg: #e6f2ec; --warn-bg: #fff6df; --warn: #7a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121815; --panel: #1b241f; --fg: #e8efe9; --muted: #98a79e; --line: #2c3a33;
+      --accent: #4fb787; --accent-fg: #08140e; --alert: #ff8a80; --alert-bg: #3a1f1c;
+      --ok: #6fd1a1; --ok-bg: #173126; --warn-bg: #352c10; --warn: #e8c35a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px max(16px, env(safe-area-inset-left)) 6px; max-width: 1180px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: 1.35rem; letter-spacing: -.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 1180px; margin: 0 auto; padding: 10px max(16px, env(safe-area-inset-left)) 28px;
+    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  #map { height: 520px; border-radius: 8px; border: 1px solid var(--line); }
+  @media (max-width: 860px) { #map { height: 360px; } }
+  .hint { color: var(--muted); font-size: .88rem; margin: 8px 2px 0; }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  .row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 3px; }
+  input, select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--fg); font: inherit; }
+  button { font: inherit; border-radius: 8px; padding: 9px 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg); }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; width: 100%; margin-top: 12px; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .examples { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .examples button { font-size: .85rem; }
+  #status { margin-top: 14px; min-height: 1.4em; color: var(--muted); font-size: .92rem; }
+  .err { color: var(--alert); }
+  #result { margin-top: 12px; display: none; }
+  .badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; letter-spacing: .02em; }
+  .badge.alert { background: var(--alert-bg); color: var(--alert); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .meter { position: relative; height: 14px; border-radius: 7px; background: var(--line); margin: 16px 0 6px; overflow: visible; }
+  .meter .fill { height: 100%; border-radius: 7px; background: var(--accent); }
+  .meter.alert .fill { background: var(--alert); }
+  .meter .thr { position: absolute; top: -5px; width: 2px; height: 24px; background: var(--fg); }
+  .scale { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); }
+  dl { margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .9rem; }
+  dt { color: var(--muted); } dd { margin: 0; }
+  .note { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: .85rem; }
+  footer { max-width: 1180px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)) 24px; color: var(--muted); font-size: .8rem; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Centinel · alerta de pérdida de bosque</h1>
+  <p>Prototipo: Caquetá y Putumayo (Colombia). Haz clic en el mapa, elige un año y analiza.</p>
+</header>
+
+<main>
+  <section class="card">
+    <div id="map" aria-label="Mapa del área piloto"></div>
+    <p class="hint">El recuadro punteado es el área piloto. Fuera de ahí el modelo no fue entrenado y la API no responde.</p>
+  </section>
+
+  <section class="card">
+    <h2>Consulta</h2>
+    <div class="row">
+      <div><label for="lat">Latitud</label><input id="lat" type="number" step="0.0001" min="0.8" max="1.8" placeholder="1.2253"></div>
+      <div><label for="lon">Longitud</label><input id="lon" type="number" step="0.0001" min="-75.5" max="-74.0" placeholder="-74.3909"></div>
+      <div><label for="year">Año evaluado</label>
+        <select id="year"><option value="2022">2022</option><option value="2023" selected>2023</option></select></div>
+    </div>
+    <button id="go" class="primary">Analizar este punto</button>
+    <div class="examples">
+      <button id="ex-pos" type="button">Ejemplo con pérdida (2022)</button>
+      <button id="ex-neg" type="button">Ejemplo sin pérdida (2023)</button>
+    </div>
+
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <div id="result" aria-live="polite">
+      <span id="badge" class="badge"></span>
+      <div id="meter" class="meter"><div id="fill" class="fill"></div><div id="thr" class="thr" title="Umbral de alerta"></div></div>
+      <div class="scale"><span>0 %</span><span id="thr-label"></span><span>100 %</span></div>
+      <dl>
+        <dt>Probabilidad</dt><dd id="r-prob"></dd>
+        <dt>Umbral de alerta</dt><dd id="r-thr"></dd>
+        <dt>Comparación</dt><dd id="r-years"></dd>
+        <dt>Zona analizada</dt><dd>unos 1,28 km × 1,28 km alrededor del punto</dd>
+      </dl>
+    </div>
+
+    <div class="note">
+      La probabilidad la calcula el modelo a partir de las imágenes de dos años; no es el porcentaje de bosque perdido.
+      La alerta indica pérdida de bosque, no que sea ilegal: requiere verificación humana.
+    </div>
+  </section>
+</main>
+
+<footer>
+  Prototipo de investigación. El modelo (óptico + radar) se probó con datos abiertos de Sentinel-1/2 y el mapa de pérdida de bosque de Hansen.
+  Cada consulta descarga imágenes de Google Earth Engine en el momento y puede tardar hasta un par de minutos.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  var AOI = [[0.8, -75.5], [1.8, -74.0]];           // [[lat_min, lon_min], [lat_max, lon_max]]
+  var $ = function (id) { return document.getElementById(id); };
+
+  var map = L.map('map', { minZoom: 7, maxZoom: 15 });
+  var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Imágenes © Esri, Maxar, Earthstar Geographics', maxZoom: 17 }).addTo(map);
+  var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap', maxZoom: 17 });
+  L.control.layers({ 'Satélite': sat, 'Calles': osm }, null, { collapsed: true }).addTo(map);
+  L.rectangle(AOI, { color: '#ffd54f', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map);
+  map.fitBounds(AOI);
+
+  var marker = null, zone = null, timer = null, controller = null;
+
+  function inside(lat, lon) { return lat >= AOI[0][0] && lat <= AOI[1][0] && lon >= AOI[0][1] && lon <= AOI[1][1]; }
+
+  function setPoint(lat, lon) {
+    $('lat').value = lat.toFixed(4); $('lon').value = lon.toFixed(4);
+    if (marker) map.removeLayer(marker);
+    marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#e53935', fillOpacity: 1 }).addTo(map);
+  }
+  function clearZone() { if (zone) { map.removeLayer(zone); zone = null; } }
+  function pct(x) { return (x * 100).toFixed(1).replace('.', ',') + ' %'; }
+  function setStatus(msg, isErr) { var s = $('status'); s.textContent = msg || ''; s.className = isErr ? 'err' : ''; }
+  function busy(on) { ['go', 'ex-pos', 'ex-neg'].forEach(function (id) { $(id).disabled = on; }); }
+
+  map.on('click', function (e) {
+    if (!inside(e.latlng.lat, e.latlng.lng)) { setStatus('Ese punto está fuera del área piloto (recuadro punteado).', true); return; }
+    setStatus(''); setPoint(e.latlng.lat, e.latlng.lng);
+  });
+  ['lat', 'lon'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+      var la = parseFloat($('lat').value), lo = parseFloat($('lon').value);
+      if (isFinite(la) && isFinite(lo)) setPoint(la, lo);
+    });
+  });
+
+  function showResult(d) {
+    var r = d.deforestation, alert = r.alert;
+    $('result').style.display = 'block';
+    var b = $('badge'); b.textContent = alert ? 'ALERTA: posible pérdida de bosque' : 'SIN ALERTA'; b.className = 'badge ' + (alert ? 'alert' : 'ok');
+    $('meter').className = 'meter' + (alert ? ' alert' : '');
+    $('fill').style.width = Math.max(1, r.probability * 100) + '%';
+    $('thr').style.left = (r.threshold * 100) + '%';
+    $('thr-label').textContent = 'umbral ' + pct(r.threshold);
+    $('r-prob').textContent = pct(r.probability);
+    $('r-thr').textContent = pct(r.threshold) + ' (alerta si la probabilidad lo alcanza)';
+    $('r-years').textContent = d.compared_against + ' → ' + d.year;
+    clearZone();
+    var bb = d.location.bbox;                         // [lon_min, lat_min, lon_max, lat_max]
+    zone = L.rectangle([[bb[1], bb[0]], [bb[3], bb[2]]], { color: alert ? '#e53935' : '#43a047', weight: 3, fillOpacity: .15 }).addTo(map);
+    map.fitBounds(zone.getBounds().pad(3), { maxZoom: 13 });
+  }
+
+  function run() {
+    var lat = parseFloat($('lat').value), lon = parseFloat($('lon').value), year = $('year').value;
+    if (!isFinite(lat) || !isFinite(lon)) { setStatus('Haz clic en el mapa o escribe una latitud y una longitud.', true); return; }
+    if (!inside(lat, lon)) { setStatus('Fuera del área piloto: latitud 0,8 a 1,8 y longitud −75,5 a −74,0.', true); return; }
+    $('result').style.display = 'none'; clearZone(); busy(true);
+    var t0 = Date.now();
+    var tick = function () { setStatus('Descargando imágenes de Earth Engine y analizando… ' + Math.round((Date.now() - t0) / 1000) + ' s (puede tardar hasta 1–2 min)'); };
+    tick(); timer = setInterval(tick, 1000);
+    controller = new AbortController();
+    var kill = setTimeout(function () { controller.abort(); }, 170000);
+    fetch('/predict?lat=' + lat + '&lon=' + lon + '&year=' + year, { signal: controller.signal })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Error ' + res.status);
+          return body;
+        });
+      })
+      .then(function (d) { setStatus('Listo en ' + Math.round((Date.now() - t0) / 1000) + ' s.'); showResult(d); })
+      .catch(function (e) {
+        setStatus(e.name === 'AbortError' ? 'La consulta tardó demasiado. Inténtalo de nuevo.' : 'No se pudo analizar: ' + e.message, true);
+      })
+      .then(function () { clearInterval(timer); clearTimeout(kill); busy(false); });
+  }
+
+  $('go').addEventListener('click', run);
+  $('ex-pos').addEventListener('click', function () { setPoint(1.2253, -74.3909); $('year').value = '2022'; run(); });
+  $('ex-neg').addEventListener('click', function () { setPoint(0.8604, -75.3104); $('year').value = '2023'; run(); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+# Nunca subir llaves ni credenciales
+*.json
+.env
+# El modelo entrenado pesa ~45 MB: no se versiona por defecto (ver DEPLOY.md, sección "El modelo")
+models/*.pt
